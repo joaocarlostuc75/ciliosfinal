@@ -1,0 +1,7 @@
+{
+  "name": "Cílios de Luxo - Manager",
+  "description": "A comprehensive beauty salon management system featuring a public booking interface and a private admin dashboard. Includes scheduling, client management, and financial analytics.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
