@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../services/mockDb';
-import { Appointment, AppointmentStatus, Service } from '../../types';
+import { AppointmentStatus, OrderStatus } from '../../types';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend
@@ -11,13 +11,15 @@ import { ptBR } from 'date-fns/locale';
 export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({
-    monthlyRevenue: 0,
+    totalRevenue: 0,
+    serviceRevenue: 0,
+    productRevenue: 0,
     monthlyAppointments: 0,
+    monthlyOrders: 0,
     averageTicket: 0,
-    cancelRate: 0,
   });
   const [revenueData, setRevenueData] = useState<any[]>([]);
-  const [servicesData, setServicesData] = useState<any[]>([]);
+  const [topItemsData, setTopItemsData] = useState<any[]>([]);
 
   // Theme Colors
   const COLORS = ['#C5A059', '#1A1612', '#8E6E3E', '#E5E7EB', '#FCD34D'];
@@ -27,9 +29,12 @@ export const Dashboard: React.FC = () => {
         setLoading(true);
         const appts = await db.getAppointments();
         const services = await db.getServices();
+        const orders = await db.getOrders();
+        const products = await db.getProducts();
+
         const today = new Date();
         
-        // Manual start of month calculation to avoid import issues
+        // Manual start of month calculation
         const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
         monthStart.setHours(0, 0, 0, 0);
         
@@ -37,70 +42,98 @@ export const Dashboard: React.FC = () => {
         const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
         monthEnd.setHours(23, 59, 59, 999);
 
-        // 1. Filter Current Month Data
+        // --- 1. Filter Current Month Data ---
         const monthAppts = appts.filter(a => isSameMonth(new Date(a.start_time), today));
+        const monthOrders = orders.filter(o => isSameMonth(new Date(o.created_at), today));
 
-        // 2. Calculate Basic Metrics
-        let revenue = 0;
-        let completedCount = 0;
-        let cancelledCount = 0;
-        const serviceCounts: Record<string, number> = {};
+        // --- 2. Calculate Metrics ---
+        let serviceRev = 0;
+        let productRev = 0;
+        let completedApptsCount = 0;
+        let completedOrdersCount = 0;
+        const itemCounts: Record<string, number> = {};
 
+        // Process Appointments
         monthAppts.forEach(a => {
             const service = services.find(s => s.id === a.service_id);
             const price = service ? service.price : 0;
-            const serviceName = service ? service.name : 'Outros';
+            const serviceName = service ? service.name : 'Serviço desconhecido';
 
             if (a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CONFIRMED) {
-                revenue += price;
-                completedCount++;
-                serviceCounts[serviceName] = (serviceCounts[serviceName] || 0) + 1;
-            } else if (a.status === AppointmentStatus.CANCELLED) {
-                cancelledCount++;
+                serviceRev += price;
+                completedApptsCount++;
+                itemCounts[serviceName] = (itemCounts[serviceName] || 0) + 1;
             }
         });
 
-        const totalAppts = monthAppts.length;
-        const ticket = completedCount > 0 ? revenue / completedCount : 0;
-        const cancelRate = totalAppts > 0 ? (cancelledCount / totalAppts) * 100 : 0;
+        // Process Orders
+        monthOrders.forEach(o => {
+            const product = products.find(p => p.id === o.product_id);
+            // Use current price, or 0 if product deleted. ideally order should store historical price
+            const price = product ? product.price : 0; 
+            const productName = product ? `(Prod) ${product.name}` : 'Produto desconhecido';
 
-        setMetrics({
-            monthlyRevenue: revenue,
-            monthlyAppointments: completedCount,
-            averageTicket: ticket,
-            cancelRate: Math.round(cancelRate)
+            if (o.status === OrderStatus.COMPLETED) {
+                productRev += price;
+                completedOrdersCount++;
+                itemCounts[productName] = (itemCounts[productName] || 0) + 1;
+            }
         });
 
-        // 3. Prepare Chart Data: Revenue over Time (Daily)
+        const totalRevenue = serviceRev + productRev;
+        const totalTransactions = completedApptsCount + completedOrdersCount;
+        const ticket = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+
+        setMetrics({
+            totalRevenue,
+            serviceRevenue: serviceRev,
+            productRevenue: productRev,
+            monthlyAppointments: completedApptsCount,
+            monthlyOrders: completedOrdersCount,
+            averageTicket: ticket,
+        });
+
+        // --- 3. Prepare Chart Data: Revenue over Time (Daily) ---
         const chartEndDate = (today > monthEnd) ? monthEnd : today;
-        
         const daysInMonth = eachDayOfInterval({ start: monthStart, end: chartEndDate });
         
         const chartData = daysInMonth.map(day => {
+            // Service Revenue for Day
             const dayAppts = monthAppts.filter(a => 
                 isSameDay(new Date(a.start_time), day) && 
                 (a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CONFIRMED)
             );
-            
-            const dayRevenue = dayAppts.reduce((acc, curr) => {
+            const dayServiceRevenue = dayAppts.reduce((acc, curr) => {
                 const s = services.find(serv => serv.id === curr.service_id);
                 return acc + (s ? s.price : 0);
             }, 0);
 
+            // Product Revenue for Day
+            const dayOrders = monthOrders.filter(o => 
+                isSameDay(new Date(o.created_at), day) &&
+                o.status === OrderStatus.COMPLETED
+            );
+            const dayProductRevenue = dayOrders.reduce((acc, curr) => {
+                const p = products.find(prod => prod.id === curr.product_id);
+                return acc + (p ? p.price : 0);
+            }, 0);
+
             return {
                 date: format(day, 'dd/MM'),
-                faturamento: dayRevenue,
-                agendamentos: dayAppts.length
+                faturamento: dayServiceRevenue + dayProductRevenue,
+                servicos: dayServiceRevenue,
+                produtos: dayProductRevenue
             };
         });
         setRevenueData(chartData);
 
-        // 4. Prepare Chart Data: Service Distribution
-        const pieData = Object.entries(serviceCounts)
+        // --- 4. Prepare Pie Chart Data: Top Items (Services + Products) ---
+        const pieData = Object.entries(itemCounts)
             .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value); // Sort desc
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5); // Top 5 items
         
-        setServicesData(pieData);
+        setTopItemsData(pieData);
         setLoading(false);
     };
 
@@ -111,8 +144,8 @@ export const Dashboard: React.FC = () => {
     <div className="bg-white p-6 rounded-2xl shadow-lg border border-gold-100 flex items-start justify-between hover:shadow-xl transition-shadow">
         <div>
             <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">{title}</p>
-            <h3 className="text-3xl font-serif font-bold text-gold-900">{value}</h3>
-            {subtext && <p className={`text-xs mt-1 font-medium ${subtext.includes('+') ? 'text-green-600' : 'text-gray-400'}`}>{subtext}</p>}
+            <h3 className="text-2xl md:text-3xl font-serif font-bold text-gold-900">{value}</h3>
+            {subtext && <p className="text-xs mt-1 font-medium text-gray-400">{subtext}</p>}
         </div>
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-md ${colorClass}`}>
             <span className="material-symbols-outlined text-2xl">{icon}</span>
@@ -145,32 +178,32 @@ export const Dashboard: React.FC = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-            title="Receita Mensal" 
-            value={`R$ ${metrics.monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
-            subtext="Faturamento confirmado"
+            title="Receita Total" 
+            value={`R$ ${metrics.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} 
+            subtext="Serviços + Produtos"
             icon="payments" 
             colorClass="bg-gradient-to-br from-gold-500 to-gold-700" 
         />
         <StatCard 
-            title="Agendamentos" 
+            title="Serviços Realizados" 
             value={metrics.monthlyAppointments} 
-            subtext="Neste mês"
-            icon="event_available" 
+            subtext={`R$ ${metrics.serviceRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em serviços`}
+            icon="spa" 
             colorClass="bg-gray-800" 
+        />
+        <StatCard 
+            title="Vendas de Produtos" 
+            value={metrics.monthlyOrders} 
+            subtext={`R$ ${metrics.productRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em vendas`}
+            icon="shopping_bag" 
+            colorClass="bg-emerald-600" 
         />
         <StatCard 
             title="Ticket Médio" 
             value={`R$ ${metrics.averageTicket.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`} 
-            subtext="Por cliente"
+            subtext="Geral (Vendas + Serviços)"
             icon="trending_up" 
             colorClass="bg-blue-600" 
-        />
-        <StatCard 
-            title="Cancelamentos" 
-            value={`${metrics.cancelRate}%`} 
-            subtext="Taxa global mensal"
-            icon="event_busy" 
-            colorClass="bg-red-500" 
         />
       </div>
 
@@ -179,7 +212,11 @@ export const Dashboard: React.FC = () => {
         
         {/* Main Chart: Revenue Evolution */}
         <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-gold-100 flex flex-col">
-            <h3 className="font-serif text-xl font-bold text-gold-900 mb-6">Evolução de Receita</h3>
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="font-serif text-xl font-bold text-gold-900">Evolução de Faturamento</h3>
+                <span className="text-xs text-gray-400 uppercase tracking-widest">Diário</span>
+            </div>
+            
             <div className="flex-1 w-full min-h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -220,17 +257,17 @@ export const Dashboard: React.FC = () => {
             </div>
         </div>
 
-        {/* Secondary Chart: Services Breakdown */}
+        {/* Secondary Chart: Top Items */}
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-gold-100 flex flex-col">
-            <h3 className="font-serif text-xl font-bold text-gold-900 mb-2">Top Serviços</h3>
-            <p className="text-xs text-gray-400 mb-6">Distribuição por volume de vendas</p>
+            <h3 className="font-serif text-xl font-bold text-gold-900 mb-2">Top Itens</h3>
+            <p className="text-xs text-gray-400 mb-6">Serviços e Produtos mais vendidos</p>
             
             <div className="flex-1 w-full min-h-[300px] relative">
-                {servicesData.length > 0 ? (
+                {topItemsData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                             <Pie
-                                data={servicesData}
+                                data={topItemsData}
                                 cx="50%"
                                 cy="50%"
                                 innerRadius={60}
@@ -238,7 +275,7 @@ export const Dashboard: React.FC = () => {
                                 paddingAngle={5}
                                 dataKey="value"
                             >
-                                {servicesData.map((entry, index) => (
+                                {topItemsData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                             </Pie>
@@ -249,7 +286,7 @@ export const Dashboard: React.FC = () => {
                                 layout="horizontal" 
                                 verticalAlign="bottom" 
                                 align="center"
-                                wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }}
+                                wrapperStyle={{ fontSize: '11px', paddingTop: '20px' }}
                             />
                         </PieChart>
                     </ResponsiveContainer>
