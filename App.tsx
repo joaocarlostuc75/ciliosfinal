@@ -6,6 +6,7 @@ import { db } from './services/mockDb';
 import { Splash } from './pages/public/Splash';
 import { ServicesList } from './pages/public/ServicesList';
 import { Booking } from './pages/public/Booking';
+import { ProductOrder } from './pages/public/ProductOrder';
 import { Login } from './pages/admin/Login';
 
 // Admin Pages
@@ -39,6 +40,7 @@ const App: React.FC = () => {
         <Route path="/" element={<Splash />} />
         <Route path="/services" element={<ServicesList />} />
         <Route path="/book/:serviceId" element={<Booking />} />
+        <Route path="/order/:productId" element={<ProductOrder />} />
         <Route path="/login" element={<Login />} />
 
         {/* Admin Routes */}
