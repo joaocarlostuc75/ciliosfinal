@@ -140,10 +140,14 @@ export const Booking: React.FC = () => {
       const msg = `Olá, gostaria de confirmar meu agendamento: ${service.name} para o dia ${format(selectedSlot, "dd/MM 'às' HH:mm")}. Meu nome é ${clientName}.`;
       const waLink = `https://wa.me/55${salon.phone}?text=${encodeURIComponent(msg)}`;
       
-      // Simulate API delay
-      setTimeout(() => {
-        window.location.href = waLink;
-      }, 1000);
+      setLoading(false);
+
+      // Open in new tab to keep site open
+      window.open(waLink, '_blank');
+      
+      // Feedback to user and redirect to schedule
+      alert('Agendamento pré-confirmado! Você será redirecionado para a sua agenda.');
+      navigate(`/my-schedule?phone=${clientPhone}`);
 
     } catch (error) {
       alert((error as Error).message);
@@ -277,7 +281,7 @@ export const Booking: React.FC = () => {
                     <div className="bg-gold-100/50 p-4 rounded-xl border border-gold-200/50 flex gap-3 items-start">
                         <span className="material-symbols-outlined text-gold-600">info</span>
                         <p className="text-xs text-gold-800 leading-relaxed">
-                            Ao confirmar, você será redirecionado para o WhatsApp para finalizar o agendamento com nossa recepção.
+                            Ao confirmar, você será redirecionado para o WhatsApp (em uma nova aba) para finalizar o agendamento com nossa recepção.
                         </p>
                     </div>
 

@@ -317,6 +317,14 @@ class ApiService {
     return appointments.filter(a => a.client_id === clientId);
   }
 
+  async getClientAppointmentsByPhone(phone: string): Promise<Appointment[]> {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const clients = await this.getClients();
+    const client = clients.find(c => c.whatsapp.replace(/\D/g, '') === cleanPhone);
+    if (!client) return [];
+    return this.getClientHistory(client.id);
+  }
+
   async getClientOrders(phone: string): Promise<Order[]> {
     const cleanPhone = phone.replace(/\D/g, '');
     const orders = await this.getOrders();

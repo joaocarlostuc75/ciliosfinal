@@ -25,7 +25,9 @@ export const ServicesList: React.FC = () => {
             <span className="material-symbols-outlined">arrow_back_ios</span>
          </button>
          <h1 className="font-serif font-bold text-gold-900 text-lg">Cílios de Luxo</h1>
-         <div className="w-8" />
+         <button onClick={() => navigate('/my-schedule')} className="text-gold-700 p-2 hover:bg-gold-50 rounded-full transition-colors" title="Minha Agenda">
+            <span className="material-symbols-outlined">event_note</span>
+         </button>
       </header>
 
       <main className="p-4 md:p-8 max-w-6xl mx-auto space-y-8">

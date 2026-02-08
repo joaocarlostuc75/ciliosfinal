@@ -7,6 +7,7 @@ import { Splash } from './pages/public/Splash';
 import { ServicesList } from './pages/public/ServicesList';
 import { Booking } from './pages/public/Booking';
 import { ProductOrder } from './pages/public/ProductOrder';
+import { MySchedule } from './pages/public/MySchedule';
 import { Login } from './pages/admin/Login';
 
 // Admin Pages
@@ -41,6 +42,7 @@ const App: React.FC = () => {
         <Route path="/services" element={<ServicesList />} />
         <Route path="/book/:serviceId" element={<Booking />} />
         <Route path="/order/:productId" element={<ProductOrder />} />
+        <Route path="/my-schedule" element={<MySchedule />} />
         <Route path="/login" element={<Login />} />
 
         {/* Admin Routes */}
