@@ -10,15 +10,19 @@ export const ProductsManager: React.FC = () => {
   // Form State
   const [formData, setFormData] = useState({ name: '', price: '', stock: '', description: '' });
 
+  const loadProducts = async () => {
+    setProducts(await db.getProducts());
+  };
+
   useEffect(() => {
-    setProducts(db.getProducts());
+    loadProducts();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newProduct: Product = {
         id: editingProduct ? editingProduct.id : crypto.randomUUID(),
-        salon_id: 'salon-123',
+        salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
         name: formData.name,
         price: Number(formData.price),
         stock: Number(formData.stock),
@@ -26,11 +30,11 @@ export const ProductsManager: React.FC = () => {
     };
 
     if (editingProduct) {
-        db.updateProduct(newProduct);
+        await db.updateProduct(newProduct);
     } else {
-        db.addProduct(newProduct);
+        await db.addProduct(newProduct);
     }
-    setProducts(db.getProducts());
+    await loadProducts();
     closeModal();
   };
 
@@ -52,10 +56,10 @@ export const ProductsManager: React.FC = () => {
 
   const closeModal = () => setIsModalOpen(false);
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
       if(confirm('Tem certeza que deseja excluir este produto?')) {
-          db.deleteProduct(id);
-          setProducts(db.getProducts());
+          await db.deleteProduct(id);
+          await loadProducts();
       }
   };
 

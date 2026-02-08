@@ -8,7 +8,10 @@ export const ServicesList: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
 
   useEffect(() => {
-    setServices(db.getServices());
+    const load = async () => {
+      setServices(await db.getServices());
+    };
+    load();
   }, []);
 
   return (

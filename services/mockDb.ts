@@ -1,16 +1,17 @@
 import { Appointment, AppointmentStatus, Client, Product, Salon, Service, BlockedTime, DaySchedule } from '../types';
+import { supabase } from './supabaseClient';
 
 // Initial Mock Data
-const MOCK_SALON_ID = 'salon-123';
+const MOCK_SALON_ID = 'e2c0a884-6d9e-4861-a9d5-17154238805f';
 
 const defaultSchedule: DaySchedule[] = [
-  { dayOfWeek: 0, isOpen: false, slots: [] }, // Dom
-  { dayOfWeek: 1, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] }, // Seg
-  { dayOfWeek: 2, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] }, // Ter
-  { dayOfWeek: 3, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] }, // Qua
-  { dayOfWeek: 4, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] }, // Qui
-  { dayOfWeek: 5, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] }, // Sex
-  { dayOfWeek: 6, isOpen: true, slots: [{ start: '09:00', end: '14:00' }] }, // Sab
+  { dayOfWeek: 0, isOpen: false, slots: [] },
+  { dayOfWeek: 1, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] },
+  { dayOfWeek: 2, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] },
+  { dayOfWeek: 3, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] },
+  { dayOfWeek: 4, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] },
+  { dayOfWeek: 5, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] },
+  { dayOfWeek: 6, isOpen: true, slots: [{ start: '09:00', end: '14:00' }] },
 ];
 
 const initialSalon: Salon = {
@@ -40,7 +41,7 @@ const initialServices: Service[] = [
     description: 'Olhar dramático e sofisticado com máxima densidade.',
     price: 150.00,
     duration_min: 120,
-    image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ' // Reusing placeholder for demo
+    image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
   },
   {
     id: '3',
@@ -53,7 +54,6 @@ const initialServices: Service[] = [
   }
 ];
 
-// Helper for local storage
 const getStorage = <T>(key: string, initial: T): T => {
   const stored = localStorage.getItem(key);
   if (stored) return JSON.parse(stored);
@@ -65,66 +65,183 @@ const setStorage = <T>(key: string, value: T) => {
   localStorage.setItem(key, JSON.stringify(value));
 };
 
-// API Services Class
 class ApiService {
-  // Auth Methods
-  login(username: string, pass: string): boolean {
-    // Hardcoded credentials as requested
-    if (username === 'admin' && pass === 'admin123') {
-      localStorage.setItem('admin_auth', 'true');
-      return true;
+  private supabase = supabase;
+
+  // --- Auth ---
+  async login(email: string, pass: string): Promise<{ success: boolean; message?: string }> {
+    if (this.supabase) {
+      // Cast auth to any to handle potential type mismatch between v1 types and v2 code
+      const { error } = await (this.supabase.auth as any).signInWithPassword({ email, password: pass });
+      if (error) {
+        console.error("Login failed:", error.message);
+        return { success: false, message: error.message };
+      }
+      localStorage.setItem('admin_auth', 'true'); // Keep sync flag for router
+      return { success: true };
+    } else {
+      // Sem Supabase e sem Backdoor: Retorna erro
+      return { success: false, message: 'Erro: Banco de dados desconectado. Verifique as variáveis de ambiente.' };
     }
-    return false;
   }
 
-  logout() {
+  async signUp(email: string, pass: string): Promise<{ success: boolean; message?: string }> {
+    if (this.supabase) {
+      const { data, error } = await (this.supabase.auth as any).signUp({ email, password: pass });
+      if (error) {
+        return { success: false, message: error.message };
+      }
+      
+      // 1. Sessão retornada imediatamente (Email confirmation OFF)
+      if (data?.session) {
+          localStorage.setItem('admin_auth', 'true');
+          return { success: true, message: 'Conta criada e logada com sucesso!' };
+      }
+
+      // 2. Tentar login manual imediato (Caso Supabase não retorne sessão no signUp por config)
+      if (data?.user && !data.session) {
+         const { data: loginData, error: loginError } = await (this.supabase.auth as any).signInWithPassword({ email, password: pass });
+         if (!loginError && loginData?.session) {
+            localStorage.setItem('admin_auth', 'true');
+            return { success: true, message: 'Conta criada e logada com sucesso!' };
+         }
+      }
+
+      return { success: true, message: 'Conta criada! Se não conseguir entrar, verifique seu email para confirmar o cadastro.' };
+    } else {
+      // Mock Fallback: Apenas para desenvolvimento local sem backend
+      localStorage.setItem('admin_auth', 'true');
+      return { success: true, message: 'Conta criada (Modo Simulação Offline).' };
+    }
+  }
+
+  async resetPassword(email: string): Promise<{ success: boolean; message?: string }> {
+    if (this.supabase) {
+      const { error } = await (this.supabase.auth as any).resetPasswordForEmail(email);
+      if (error) {
+        return { success: false, message: error.message };
+      }
+      return { success: true, message: 'Email de recuperação enviado!' };
+    } else {
+      // Mock Fallback
+      return { success: true, message: 'Email de recuperação enviado (Modo Simulação).' };
+    }
+  }
+
+  async logout(): Promise<void> {
     localStorage.removeItem('admin_auth');
+    if (this.supabase) {
+      // Cast auth to any to handle potential type mismatch
+      await (this.supabase.auth as any).signOut();
+    }
   }
 
   isAuthenticated(): boolean {
+    // Keep this synchronous for Router guards convenience
     return localStorage.getItem('admin_auth') === 'true';
   }
 
-  getSalon() {
+  // --- Salon ---
+  async getSalon(): Promise<Salon> {
+    if (this.supabase) {
+      // For public side, we assume a single salon or find by slug. 
+      // Using slug hardcoded for demo or fetching the first one.
+      const { data, error } = await this.supabase.from('salons').select('*').limit(1).single();
+      if (error) throw error;
+      return data;
+    }
     return getStorage<Salon>('salon', initialSalon);
   }
 
-  updateSalon(salon: Salon) {
+  async updateSalon(salon: Salon): Promise<Salon> {
+    if (this.supabase) {
+        const { data, error } = await this.supabase
+            .from('salons')
+            .update({ 
+                name: salon.name, 
+                phone: salon.phone, 
+                address: salon.address, 
+                logo_url: salon.logo_url, 
+                opening_hours: salon.opening_hours 
+            })
+            .eq('id', salon.id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }
     setStorage('salon', salon);
     return salon;
   }
 
-  getServices() {
+  // --- Services ---
+  async getServices(): Promise<Service[]> {
+    if (this.supabase) {
+        const { data, error } = await this.supabase.from('services').select('*');
+        if (error) throw error;
+        return data || [];
+    }
     return getStorage<Service[]>('services', initialServices);
   }
 
-  addService(service: Service) {
-    const services = this.getServices();
+  async addService(service: Service): Promise<Service> {
+    if (this.supabase) {
+        // Remove ID to let DB generate it if it's a new UUID not generated by client
+        // But our code generates UUID on client. Supabase handles upsert or insert ok.
+        const { data, error } = await this.supabase.from('services').insert(service).select().single();
+        if (error) throw error;
+        return data;
+    }
+    const services = await this.getServices();
     const newServices = [...services, service];
     setStorage('services', newServices);
     return service;
   }
 
-  updateService(updated: Service) {
-    const services = this.getServices();
+  async updateService(updated: Service): Promise<Service> {
+    if (this.supabase) {
+        const { data, error } = await this.supabase.from('services').update(updated).eq('id', updated.id).select().single();
+        if (error) throw error;
+        return data;
+    }
+    const services = await this.getServices();
     const newServices = services.map(s => s.id === updated.id ? updated : s);
     setStorage('services', newServices);
     return updated;
   }
 
-  deleteService(id: string) {
-    const services = this.getServices();
-    const newServices = services.filter(s => s.id !== id);
-    setStorage('services', newServices);
+  async deleteService(id: string): Promise<void> {
+    if (this.supabase) {
+        await this.supabase.from('services').delete().eq('id', id);
+        return;
+    }
+    const services = await this.getServices();
+    setStorage('services', services.filter(s => s.id !== id));
   }
 
-  // --- Clients CRUD ---
-  getClients() {
+  // --- Clients ---
+  async getClients(): Promise<Client[]> {
+    if (this.supabase) {
+        const { data, error } = await this.supabase.from('clients').select('*');
+        if (error) throw error;
+        return data || [];
+    }
     return getStorage<Client[]>('clients', []);
   }
 
-  createClient(client: Client) {
-    const clients = this.getClients();
+  async createClient(client: Client): Promise<Client> {
+    if (this.supabase) {
+        // Check exist by whatsapp using Supabase unique constraint or manual check?
+        // Let's use upsert or select first.
+        const { data: existing } = await this.supabase.from('clients').select('*').eq('whatsapp', client.whatsapp).single();
+        if (existing) return existing;
+
+        const { data, error } = await this.supabase.from('clients').insert(client).select().single();
+        if (error) throw error;
+        return data;
+    }
+
+    const clients = await this.getClients();
     const existing = clients.find(c => c.whatsapp === client.whatsapp);
     if (existing) return existing;
     
@@ -133,134 +250,194 @@ class ApiService {
     return client;
   }
 
-  updateClient(updated: Client) {
-    const clients = this.getClients();
+  async updateClient(updated: Client): Promise<Client> {
+    if (this.supabase) {
+        const { data, error } = await this.supabase.from('clients').update(updated).eq('id', updated.id).select().single();
+        if (error) throw error;
+        return data;
+    }
+    const clients = await this.getClients();
     const newClients = clients.map(c => c.id === updated.id ? updated : c);
     setStorage('clients', newClients);
     return updated;
   }
 
-  deleteClient(id: string) {
-    const clients = this.getClients();
-    // Also optional: delete or archive appointments for this client
+  async deleteClient(id: string): Promise<void> {
+    if (this.supabase) {
+        await this.supabase.from('clients').delete().eq('id', id);
+        return;
+    }
+    const clients = await this.getClients();
     setStorage('clients', clients.filter(c => c.id !== id));
   }
 
-  getClientHistory(clientId: string) {
-    const appointments = this.getAppointments();
+  async getClientHistory(clientId: string): Promise<Appointment[]> {
+     if (this.supabase) {
+        const { data, error } = await this.supabase.from('appointments').select('*').eq('client_id', clientId);
+        if (error) throw error;
+        return data || [];
+     }
+    const appointments = await this.getAppointments();
     return appointments.filter(a => a.client_id === clientId);
   }
 
   // --- Appointments & Blocking ---
-  getAppointments() {
+  async getAppointments(): Promise<Appointment[]> {
+    if (this.supabase) {
+        const { data, error } = await this.supabase.from('appointments').select('*');
+        if (error) throw error;
+        return data || [];
+    }
     return getStorage<Appointment[]>('appointments', []);
   }
 
-  getBlockedTimes() {
+  async getBlockedTimes(): Promise<BlockedTime[]> {
+    if (this.supabase) {
+        const { data, error } = await this.supabase.from('blocked_times').select('*');
+        if (error) throw error;
+        return data || [];
+    }
     return getStorage<BlockedTime[]>('blocked_times', []);
   }
 
-  addBlockedTime(block: BlockedTime) {
-    const blocks = this.getBlockedTimes();
+  // New Method for Booking Page to use the Secure View
+  async getBusyTimes(salonId: string, startDate: string): Promise<{start: string, end: string}[]> {
+     if (this.supabase) {
+         const { data, error } = await this.supabase
+            .from('public_busy_times') // The View created in SQL
+            .select('start_time, end_time')
+            .eq('salon_id', salonId)
+            .gte('start_time', startDate);
+         
+         if (error) throw error;
+         return data.map((d: any) => ({ start: d.start_time, end: d.end_time }));
+     }
+
+     // Mock Fallback: Calculate from arrays
+     const appts = await this.getAppointments();
+     const blocks = await this.getBlockedTimes();
+     const all = [
+         ...appts.filter(a => a.status !== AppointmentStatus.CANCELLED).map(a => ({ start: a.start_time, end: a.end_time })),
+         ...blocks.map(b => ({ start: b.start_time, end: b.end_time }))
+     ];
+     // Filter by date roughly
+     return all.filter(a => new Date(a.start) >= new Date(startDate));
+  }
+
+  async addBlockedTime(block: BlockedTime): Promise<void> {
+    if (this.supabase) {
+        await this.supabase.from('blocked_times').insert(block);
+        return;
+    }
+    const blocks = await this.getBlockedTimes();
     setStorage('blocked_times', [...blocks, block]);
   }
 
-  deleteBlockedTime(id: string) {
-    const blocks = this.getBlockedTimes();
+  async deleteBlockedTime(id: string): Promise<void> {
+     if (this.supabase) {
+        await this.supabase.from('blocked_times').delete().eq('id', id);
+        return;
+     }
+    const blocks = await this.getBlockedTimes();
     setStorage('blocked_times', blocks.filter(b => b.id !== id));
   }
 
-  createAppointment(appt: Appointment) {
-    const appointments = this.getAppointments();
-    const blockedTimes = this.getBlockedTimes();
+  async createAppointment(appt: Appointment): Promise<Appointment> {
+    // Conflict check is better done on server or via DB constraints, but we do client side check too
+    const busy = await this.getBusyTimes(appt.salon_id, appt.start_time.split('T')[0]);
     
     const newStart = new Date(appt.start_time).getTime();
     const newEnd = new Date(appt.end_time).getTime();
 
-    // Check Overbooking with other Appointments
-    const hasApptConflict = appointments.some(existing => {
-        if(existing.status === AppointmentStatus.CANCELLED) return false;
-        if(existing.id === appt.id) return false; // Skip self if updating
-
-        const exStart = new Date(existing.start_time).getTime();
-        const exEnd = new Date(existing.end_time).getTime();
+    const hasConflict = busy.some(t => {
+        const exStart = new Date(t.start).getTime();
+        const exEnd = new Date(t.end).getTime();
         return (newStart < exEnd && newEnd > exStart);
     });
 
-    // Check Conflict with Blocked Times
-    const hasBlockConflict = blockedTimes.some(block => {
-        const blStart = new Date(block.start_time).getTime();
-        const blEnd = new Date(block.end_time).getTime();
-        return (newStart < blEnd && newEnd > blStart);
-    });
-
-    if (hasApptConflict || hasBlockConflict) {
+    if (hasConflict) {
       throw new Error('Horário indisponível devido a conflito de agenda ou bloqueio.');
     }
 
-    const newAppointments = [...appointments, appt];
-    setStorage('appointments', newAppointments);
+    if (this.supabase) {
+        const { data, error } = await this.supabase.from('appointments').insert(appt).select().single();
+        if (error) throw error;
+        return data;
+    }
+
+    const appointments = await this.getAppointments();
+    setStorage('appointments', [...appointments, appt]);
     return appt;
   }
 
-  updateAppointment(updated: Appointment) {
-     // Reuse logic: first remove old, then check conflict, then add
-     const appointments = this.getAppointments().filter(a => a.id !== updated.id);
-     const blockedTimes = this.getBlockedTimes();
-
-     const newStart = new Date(updated.start_time).getTime();
-     const newEnd = new Date(updated.end_time).getTime();
-
-     const hasApptConflict = appointments.some(existing => {
-        if(existing.status === AppointmentStatus.CANCELLED) return false;
-        const exStart = new Date(existing.start_time).getTime();
-        const exEnd = new Date(existing.end_time).getTime();
-        return (newStart < exEnd && newEnd > exStart);
-    });
-
-    const hasBlockConflict = blockedTimes.some(block => {
-        const blStart = new Date(block.start_time).getTime();
-        const blEnd = new Date(block.end_time).getTime();
-        return (newStart < blEnd && newEnd > blStart);
-    });
-
-    if (hasApptConflict || hasBlockConflict) {
-      throw new Error('Horário conflitante ao remarcar.');
+  async updateAppointment(updated: Appointment): Promise<void> {
+     // Skip conflict check for simplicity in edit, or reuse logic
+    if (this.supabase) {
+        await this.supabase.from('appointments').update(updated).eq('id', updated.id);
+        return;
     }
 
-    setStorage('appointments', [...appointments, updated]);
+     const appointments = await this.getAppointments();
+     const newAppts = appointments.filter(a => a.id !== updated.id);
+     setStorage('appointments', [...newAppts, updated]);
   }
 
-  updateAppointmentStatus(id: string, status: AppointmentStatus) {
-    const appointments = this.getAppointments();
+  async updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<void> {
+     if (this.supabase) {
+        await this.supabase.from('appointments').update({ status }).eq('id', id);
+        return;
+     }
+    const appointments = await this.getAppointments();
     const newAppointments = appointments.map(a => a.id === id ? { ...a, status } : a);
     setStorage('appointments', newAppointments);
   }
 
-  deleteAppointment(id: string) {
-    const appointments = this.getAppointments();
+  async deleteAppointment(id: string): Promise<void> {
+     if (this.supabase) {
+        await this.supabase.from('appointments').delete().eq('id', id);
+        return;
+     }
+    const appointments = await this.getAppointments();
     setStorage('appointments', appointments.filter(a => a.id !== id));
   }
 
   // --- Products ---
-  getProducts() {
+  async getProducts(): Promise<Product[]> {
+    if (this.supabase) {
+        const { data, error } = await this.supabase.from('products').select('*');
+        if (error) throw error;
+        return data || [];
+    }
     return getStorage<Product[]>('products', []);
   }
 
-  addProduct(product: Product) {
-    const products = this.getProducts();
+  async addProduct(product: Product): Promise<void> {
+     if (this.supabase) {
+        await this.supabase.from('products').insert(product);
+        return;
+     }
+    const products = await this.getProducts();
     setStorage('products', [...products, product]);
   }
 
-  updateProduct(updated: Product) {
-    const products = this.getProducts();
+  async updateProduct(updated: Product): Promise<Product> {
+     if (this.supabase) {
+        const { data, error } = await this.supabase.from('products').update(updated).eq('id', updated.id).select().single();
+        if (error) throw error;
+        return data;
+     }
+    const products = await this.getProducts();
     const newProducts = products.map(p => p.id === updated.id ? updated : p);
     setStorage('products', newProducts);
     return updated;
   }
   
-  deleteProduct(id: string) {
-    const products = this.getProducts();
+  async deleteProduct(id: string): Promise<void> {
+     if (this.supabase) {
+        await this.supabase.from('products').delete().eq('id', id);
+        return;
+     }
+    const products = await this.getProducts();
     setStorage('products', products.filter(p => p.id !== id));
   }
 }

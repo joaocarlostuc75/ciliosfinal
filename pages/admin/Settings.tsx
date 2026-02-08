@@ -14,11 +14,14 @@ export const Settings: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const currentSalon = db.getSalon();
-    setSalon(currentSalon);
-    setFormData(currentSalon);
-    setSchedule(currentSalon.opening_hours || []);
-    setPreviewLogo(currentSalon.logo_url);
+    const fetchSalon = async () => {
+        const currentSalon = await db.getSalon();
+        setSalon(currentSalon);
+        setFormData(currentSalon);
+        setSchedule(currentSalon.opening_hours || []);
+        setPreviewLogo(currentSalon.logo_url);
+    };
+    fetchSalon();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -67,7 +70,7 @@ export const Settings: React.FC = () => {
     setSchedule(newSchedule);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!salon) return;
 
@@ -76,7 +79,7 @@ export const Settings: React.FC = () => {
 
     try {
       const updatedSalon = { ...salon, ...formData, opening_hours: schedule } as Salon;
-      db.updateSalon(updatedSalon);
+      await db.updateSalon(updatedSalon);
       setSalon(updatedSalon);
       setMessage({ type: 'success', text: 'Configurações salvas com sucesso!' });
     } catch (error) {

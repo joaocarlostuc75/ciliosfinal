@@ -25,9 +25,9 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const handleLogout = (e: React.MouseEvent) => {
+  const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
-    db.logout();
+    await db.logout();
     navigate('/');
   };
 

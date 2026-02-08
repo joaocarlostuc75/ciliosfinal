@@ -10,15 +10,19 @@ export const ServicesManager: React.FC = () => {
   // Form State
   const [formData, setFormData] = useState({ name: '', price: '', duration: '', description: '' });
 
+  const loadServices = async () => {
+    setServices(await db.getServices());
+  };
+
   useEffect(() => {
-    setServices(db.getServices());
+    loadServices();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newService: Service = {
         id: editingService ? editingService.id : crypto.randomUUID(),
-        salon_id: 'salon-123',
+        salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
         name: formData.name,
         price: Number(formData.price),
         duration_min: Number(formData.duration),
@@ -27,11 +31,11 @@ export const ServicesManager: React.FC = () => {
     };
 
     if (editingService) {
-        db.updateService(newService);
+        await db.updateService(newService);
     } else {
-        db.addService(newService);
+        await db.addService(newService);
     }
-    setServices(db.getServices());
+    await loadServices();
     closeModal();
   };
 
@@ -53,10 +57,10 @@ export const ServicesManager: React.FC = () => {
 
   const closeModal = () => setIsModalOpen(false);
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
       if(confirm('Tem certeza?')) {
-          db.deleteService(id);
-          setServices(db.getServices());
+          await db.deleteService(id);
+          await loadServices();
       }
   };
 

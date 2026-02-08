@@ -8,7 +8,10 @@ export const Splash: React.FC = () => {
   const [salon, setSalon] = useState<Salon | null>(null);
 
   useEffect(() => {
-    setSalon(db.getSalon());
+    const load = async () => {
+      setSalon(await db.getSalon());
+    };
+    load();
   }, []);
 
   if (!salon) return null;

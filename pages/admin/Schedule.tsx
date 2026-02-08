@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
 import { Appointment, Service, Client, BlockedTime, AppointmentStatus } from '../../types';
-import { format, startOfToday, addDays, isSameDay, addMinutes, areIntervalsOverlapping, startOfDay, endOfDay } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { format, addDays, isSameDay, addMinutes, areIntervalsOverlapping, endOfDay } from 'date-fns';
 
 export const Schedule: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [blockedTimes, setBlockedTimes] = useState<BlockedTime[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [selectedDate, setSelectedDate] = useState(startOfToday());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    d.setHours(0,0,0,0);
+    return d;
+  });
 
   // Modals
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
@@ -33,11 +36,11 @@ export const Schedule: React.FC = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    setAppointments(db.getAppointments());
-    setBlockedTimes(db.getBlockedTimes());
-    setServices(db.getServices());
-    setClients(db.getClients());
+  const loadData = async () => {
+    setAppointments(await db.getAppointments());
+    setBlockedTimes(await db.getBlockedTimes());
+    setServices(await db.getServices());
+    setClients(await db.getClients());
   };
 
   const openBlockModal = () => {
@@ -56,7 +59,7 @@ export const Schedule: React.FC = () => {
   const getClientName = (id: string) => clients.find(c => c.id === id)?.name || 'Cliente';
 
   // --- Blocking Logic ---
-  const handleSaveBlock = (e: React.FormEvent) => {
+  const handleSaveBlock = async (e: React.FormEvent) => {
     e.preventDefault();
     const start = new Date(`${blockFormData.startDate}T${blockFormData.startTime}`);
     const end = new Date(`${blockFormData.endDate}T${blockFormData.endTime}`);
@@ -66,37 +69,37 @@ export const Schedule: React.FC = () => {
         return;
     }
 
-    db.addBlockedTime({
+    await db.addBlockedTime({
       id: crypto.randomUUID(),
-      salon_id: 'salon-123',
+      salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       reason: blockFormData.reason
     });
     
-    loadData();
+    await loadData();
     setIsBlockModalOpen(false);
   };
 
-  const handleDeleteBlock = (id: string) => {
+  const handleDeleteBlock = async (id: string) => {
     if(confirm('Remover este bloqueio?')) {
-      db.deleteBlockedTime(id);
-      loadData();
+      await db.deleteBlockedTime(id);
+      await loadData();
     }
   };
 
   // --- Appointment Actions ---
-  const handleUpdateStatus = (id: string, status: AppointmentStatus) => {
+  const handleUpdateStatus = async (id: string, status: AppointmentStatus) => {
     if(confirm(`Alterar status para ${status}?`)) {
-      db.updateAppointmentStatus(id, status);
-      loadData();
+      await db.updateAppointmentStatus(id, status);
+      await loadData();
     }
   };
 
-  const handleDeleteAppointment = (id: string) => {
+  const handleDeleteAppointment = async (id: string) => {
     if(confirm('Tem certeza que deseja excluir permanentemente este agendamento?')) {
-      db.deleteAppointment(id);
-      loadData();
+      await db.deleteAppointment(id);
+      await loadData();
     }
   };
 
@@ -109,7 +112,7 @@ export const Schedule: React.FC = () => {
     setIsRescheduleModalOpen(true);
   };
 
-  const handleSaveReschedule = (e: React.FormEvent) => {
+  const handleSaveReschedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if(!editingAppointment) return;
 
@@ -119,14 +122,14 @@ export const Schedule: React.FC = () => {
       const duration = service ? service.duration_min : 60;
       const newEnd = addMinutes(newStart, duration);
 
-      db.updateAppointment({
+      await db.updateAppointment({
         ...editingAppointment,
         start_time: newStart.toISOString(),
         end_time: newEnd.toISOString(),
         status: AppointmentStatus.CONFIRMED // Reset to confirmed if it was cancelled
       });
       
-      loadData();
+      await loadData();
       setIsRescheduleModalOpen(false);
       setEditingAppointment(null);
     } catch (error) {
@@ -140,7 +143,8 @@ export const Schedule: React.FC = () => {
     .map(a => ({ ...a, type: 'appointment' as const }));
 
   // Check if any block overlaps with the selected Day (whole day)
-  const viewStart = startOfDay(selectedDate);
+  const viewStart = new Date(selectedDate);
+  viewStart.setHours(0,0,0,0);
   const viewEnd = endOfDay(selectedDate);
 
   const dailyBlocks = blockedTimes
@@ -168,7 +172,9 @@ export const Schedule: React.FC = () => {
                <span className="material-symbols-outlined">chevron_left</span>
              </button>
              <div className="text-center w-48">
-               <h2 className="font-serif text-xl font-bold text-gold-900 capitalize">{format(selectedDate, "EEE, dd MMM", { locale: ptBR })}</h2>
+               <h2 className="font-serif text-xl font-bold text-gold-900 capitalize">
+                {new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }).format(selectedDate)}
+               </h2>
              </div>
              <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-2 hover:bg-gray-100 rounded-full">
                <span className="material-symbols-outlined">chevron_right</span>

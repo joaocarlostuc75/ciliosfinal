@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
 import { Service, AppointmentStatus, Salon, DaySchedule } from '../../types';
-import { format, addMinutes, setHours, setMinutes, isBefore, startOfToday, addDays, areIntervalsOverlapping } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { format, addMinutes, isBefore, addDays, areIntervalsOverlapping } from 'date-fns';
 
 export const Booking: React.FC = () => {
   const { serviceId } = useParams();
@@ -13,7 +12,11 @@ export const Booking: React.FC = () => {
   const [step, setStep] = useState<1 | 2>(1);
   
   // Step 1: Date & Time
-  const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const [availableSlots, setAvailableSlots] = useState<Date[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
   
@@ -23,78 +26,83 @@ export const Booking: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setSalon(db.getSalon());
-    if (serviceId) {
-      const s = db.getServices().find(s => s.id === serviceId);
-      if (s) setService(s);
-    }
+    const init = async () => {
+        const s = await db.getSalon();
+        setSalon(s);
+        if (serviceId) {
+            const services = await db.getServices();
+            const found = services.find(x => x.id === serviceId);
+            if (found) setService(found);
+        }
+    };
+    init();
   }, [serviceId]);
 
   // Generate Slots Logic
   useEffect(() => {
-    if (!service || !salon) return;
+    const fetchSlots = async () => {
+        if (!service || !salon) return;
 
-    const slots: Date[] = [];
-    const dayOfWeek = selectedDate.getDay();
-    const daySchedule = salon.opening_hours.find(d => d.dayOfWeek === dayOfWeek);
+        const slots: Date[] = [];
+        const dayOfWeek = selectedDate.getDay();
+        const daySchedule = salon.opening_hours.find(d => d.dayOfWeek === dayOfWeek);
 
-    // If salon is closed today
-    if (!daySchedule || !daySchedule.isOpen) {
-        setAvailableSlots([]);
-        setSelectedSlot(null);
-        return;
-    }
-
-    const existingAppointments = db.getAppointments();
-    const blockedTimes = db.getBlockedTimes();
-
-    // Iterate through defined slots for the day (e.g., 09-12, 13-18)
-    daySchedule.slots.forEach(timeRange => {
-        const [startHour, startMin] = timeRange.start.split(':').map(Number);
-        const [endHour, endMin] = timeRange.end.split(':').map(Number);
-
-        let current = setMinutes(setHours(selectedDate, startHour), startMin);
-        const rangeEnd = setMinutes(setHours(selectedDate, endHour), endMin);
-
-        while (isBefore(current, rangeEnd)) {
-            const slotEnd = addMinutes(current, service.duration_min);
-            
-            // Check if slot finishes after range end (e.g. starting a 1h service at 11:30 when break is 12:00)
-            if (isBefore(rangeEnd, slotEnd)) {
-                 current = addMinutes(current, 30); // Move to next potential slot
-                 continue;
-            }
-
-            // Check Collision with Appointments
-            const isApptConflict = existingAppointments.some(appt => {
-                if(appt.status === AppointmentStatus.CANCELLED) return false;
-                const apptStart = new Date(appt.start_time);
-                const apptEnd = new Date(appt.end_time);
-                return areIntervalsOverlapping({ start: current, end: slotEnd }, { start: apptStart, end: apptEnd });
-            });
-
-            // Check Collision with Blocked Times (Periods)
-            const isBlockConflict = blockedTimes.some(block => {
-                const blockStart = new Date(block.start_time);
-                const blockEnd = new Date(block.end_time);
-                return areIntervalsOverlapping({ start: current, end: slotEnd }, { start: blockStart, end: blockEnd });
-            });
-
-            // Check if it is in the past (if today)
-            const isPast = isBefore(current, new Date());
-
-            if (!isApptConflict && !isBlockConflict && !isPast) {
-                slots.push(current);
-            }
-            current = addMinutes(current, 30);
+        // If salon is closed today
+        if (!daySchedule || !daySchedule.isOpen) {
+            setAvailableSlots([]);
+            setSelectedSlot(null);
+            return;
         }
-    });
 
-    // Sort slots just in case
-    slots.sort((a, b) => a.getTime() - b.getTime());
+        // Fetch Secure Busy Times (Appointments + Blocks)
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const busyTimes = await db.getBusyTimes(salon.id, dateStr);
 
-    setAvailableSlots(slots);
-    setSelectedSlot(null);
+        // Iterate through defined slots for the day (e.g., 09-12, 13-18)
+        daySchedule.slots.forEach(timeRange => {
+            const [startHour, startMin] = timeRange.start.split(':').map(Number);
+            const [endHour, endMin] = timeRange.end.split(':').map(Number);
+
+            let current = new Date(selectedDate);
+            current.setHours(startHour, startMin, 0, 0);
+
+            const rangeEnd = new Date(selectedDate);
+            rangeEnd.setHours(endHour, endMin, 0, 0);
+
+            while (isBefore(current, rangeEnd)) {
+                const slotEnd = addMinutes(current, service.duration_min);
+                
+                // Check if slot finishes after range end (e.g. starting a 1h service at 11:30 when break is 12:00)
+                if (isBefore(rangeEnd, slotEnd)) {
+                    current = addMinutes(current, 30); // Move to next potential slot
+                    continue;
+                }
+
+                // Check Collision with Busy Times (Abstracted View)
+                const isConflict = busyTimes.some(busy => {
+                    const busyStart = new Date(busy.start);
+                    const busyEnd = new Date(busy.end);
+                    return areIntervalsOverlapping({ start: current, end: slotEnd }, { start: busyStart, end: busyEnd });
+                });
+
+                // Check if it is in the past (if today)
+                const isPast = isBefore(current, new Date());
+
+                if (!isConflict && !isPast) {
+                    slots.push(current);
+                }
+                current = addMinutes(current, 30);
+            }
+        });
+
+        // Sort slots just in case
+        slots.sort((a, b) => a.getTime() - b.getTime());
+
+        setAvailableSlots(slots);
+        setSelectedSlot(null);
+    };
+
+    fetchSlots();
   }, [selectedDate, service, salon]);
 
   const handleBooking = async (e: React.FormEvent) => {
@@ -105,7 +113,7 @@ export const Booking: React.FC = () => {
 
     try {
       // 1. Create or Get Client
-      const client = db.createClient({
+      const client = await db.createClient({
         id: crypto.randomUUID(),
         salon_id: service.salon_id,
         name: clientName,
@@ -117,7 +125,7 @@ export const Booking: React.FC = () => {
       const startTime = selectedSlot.toISOString();
       const endTime = addMinutes(selectedSlot, service.duration_min).toISOString();
 
-      db.createAppointment({
+      await db.createAppointment({
         id: crypto.randomUUID(),
         salon_id: service.salon_id,
         service_id: service.id,
@@ -197,7 +205,9 @@ export const Booking: React.FC = () => {
                                         : 'bg-white border-gold-100 text-gray-400'
                                 }`}
                             >
-                                <span className="text-xs font-bold uppercase">{format(date, 'EEE', { locale: ptBR })}</span>
+                                <span className="text-xs font-bold uppercase">
+                                    {new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(date).replace('.', '')}
+                                </span>
                                 <span className="text-xl font-serif font-bold">{format(date, 'dd')}</span>
                             </button>
                         );

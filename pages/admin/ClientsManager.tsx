@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
 import { Client, Appointment, Service } from '../../types';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 export const ClientsManager: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -24,9 +23,9 @@ export const ClientsManager: React.FC = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    setClients(db.getClients());
-    setServices(db.getServices());
+  const loadData = async () => {
+    setClients(await db.getClients());
+    setServices(await db.getServices());
   };
 
   const filteredClients = clients.filter(c => 
@@ -45,34 +44,34 @@ export const ClientsManager: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  const handleSaveClient = (e: React.FormEvent) => {
+  const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
     const newClient: Client = {
       id: editingClient ? editingClient.id : crypto.randomUUID(),
-      salon_id: 'salon-123',
+      salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
       name: formData.name,
       whatsapp: formData.whatsapp,
       created_at: editingClient ? editingClient.created_at : new Date().toISOString()
     };
 
     if (editingClient) {
-      db.updateClient(newClient);
+      await db.updateClient(newClient);
     } else {
-      db.createClient(newClient);
+      await db.createClient(newClient);
     }
-    loadData();
+    await loadData();
     setIsFormOpen(false);
   };
 
-  const handleDeleteClient = (id: string) => {
+  const handleDeleteClient = async (id: string) => {
     if (confirm('Tem certeza? Isso não apagará os agendamentos passados, mas removerá o cliente da lista.')) {
-      db.deleteClient(id);
-      loadData();
+      await db.deleteClient(id);
+      await loadData();
     }
   };
 
-  const handleViewHistory = (client: Client) => {
-    const history = db.getClientHistory(client.id);
+  const handleViewHistory = async (client: Client) => {
+    const history = await db.getClientHistory(client.id);
     // Sort by date desc
     history.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
     setViewingHistory({ client, appointments: history });
@@ -206,7 +205,7 @@ export const ClientsManager: React.FC = () => {
                     <div>
                       <p className="font-bold text-gold-900">{getServiceName(appt.service_id)}</p>
                       <p className="text-sm text-gray-500 capitalize">
-                        {format(new Date(appt.start_time), "dd 'de' MMMM, yyyy 'às' HH:mm", { locale: ptBR })}
+                        {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(appt.start_time))}
                       </p>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
