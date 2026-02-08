@@ -101,7 +101,7 @@ export const Settings: React.FC = () => {
                    <span className="material-symbols-outlined">settings_storefront</span>
                 </div>
                 <div>
-                   <h2 className="font-serif text-2xl font-bold text-gold-900">Perfil do Salão</h2>
+                   <h2 className="font-serif text-2xl font-bold text-gold-900">Perfil do Estabelecimento</h2>
                    <p className="text-sm text-gray-500">Gerencie as informações visíveis para seus clientes</p>
                 </div>
              </div>
@@ -151,7 +151,7 @@ export const Settings: React.FC = () => {
                 <div className="flex-1 w-full space-y-6">
                    <div className="grid md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                         <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">Nome do Salão</label>
+                         <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">Nome do estabelecimento</label>
                          <input 
                             type="text" 
                             name="name"

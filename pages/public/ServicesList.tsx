@@ -37,7 +37,7 @@ export const ServicesList: React.FC = () => {
             <h2 className="font-serif text-3xl md:text-4xl text-gold-900">Menu Exclusivo</h2>
             <div className="w-20 h-1 bg-gold-300 mx-auto rounded-full" />
             <p className="text-sm md:text-base text-gray-500 font-sans max-w-md mx-auto leading-relaxed">
-                Explore nossos procedimentos estéticos e produtos de alta qualidade selecionados para você.
+                Explore nossos procedimentos e produtos de alta qualidade selecionados para você.
             </p>
         </div>
 

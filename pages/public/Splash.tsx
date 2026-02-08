@@ -81,7 +81,6 @@ export const Splash: React.FC = () => {
         </div>
 
         <div className="text-center space-y-2 mb-12">
-            <span className="text-xs font-sans tracking-[0.3em] text-gold-700 uppercase">Estúdio Premium</span>
             <h1 className="font-serif text-5xl font-bold text-gold-900 leading-tight">
                 {salon.name.split(' ').map((word, i) => (
                     <span key={i} className="block">{word}</span>
@@ -100,7 +99,7 @@ export const Splash: React.FC = () => {
       </main>
 
       <footer className="p-6 text-center z-10">
-         <p className="text-[10px] text-gold-900/40 uppercase tracking-widest">Luxury Beauty Experience</p>
+         <p className="text-[10px] text-gold-900/40 uppercase tracking-widest">J.C SISTEMAS</p>
       </footer>
     </div>
   );
