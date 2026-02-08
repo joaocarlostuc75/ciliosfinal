@@ -317,6 +317,13 @@ class ApiService {
     return appointments.filter(a => a.client_id === clientId);
   }
 
+  async getClientOrders(phone: string): Promise<Order[]> {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const orders = await this.getOrders();
+    // Filter by phone number since there is no client_id FK on orders table currently
+    return orders.filter(o => o.client_phone.replace(/\D/g, '') === cleanPhone);
+  }
+
   // --- Appointments & Blocking ---
   async getAppointments(): Promise<Appointment[]> {
     if (this.supabase) {

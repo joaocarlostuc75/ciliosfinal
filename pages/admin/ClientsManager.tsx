@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
-import { Client, Appointment, Service } from '../../types';
+import { Client, Appointment, Service, Order, Product } from '../../types';
 import { format } from 'date-fns';
+
+type HistoryItem = 
+  | ({ type: 'appointment' } & Appointment) 
+  | ({ type: 'order' } & Order);
 
 export const ClientsManager: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -13,8 +17,9 @@ export const ClientsManager: React.FC = () => {
   
   // State for Edit/View
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [viewingHistory, setViewingHistory] = useState<{ client: Client, appointments: Appointment[], totalSpent: number } | null>(null);
+  const [viewingHistory, setViewingHistory] = useState<{ client: Client, items: HistoryItem[], totalSpent: number } | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   // Form Data
   const [formData, setFormData] = useState({ name: '', whatsapp: '' });
@@ -26,6 +31,7 @@ export const ClientsManager: React.FC = () => {
   const loadData = async () => {
     setClients(await db.getClients());
     setServices(await db.getServices());
+    setProducts(await db.getProducts());
   };
 
   const filteredClients = clients.filter(c => 
@@ -78,21 +84,41 @@ export const ClientsManager: React.FC = () => {
   };
 
   const getServiceData = (id: string) => services.find(s => s.id === id);
+  const getProductData = (id: string) => products.find(p => p.id === id);
 
   const handleViewHistory = async (client: Client) => {
-    const history = await db.getClientHistory(client.id);
-    history.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+    // 1. Fetch Appointments (linked by ID)
+    const appointments = await db.getClientHistory(client.id);
+    const historyApps: HistoryItem[] = appointments.map(a => ({ ...a, type: 'appointment' }));
+
+    // 2. Fetch Orders (linked by Phone)
+    const orders = await db.getClientOrders(client.whatsapp);
+    const historyOrders: HistoryItem[] = orders.map(o => ({ ...o, type: 'order' }));
+
+    // 3. Merge and Sort
+    const merged: HistoryItem[] = [...historyApps, ...historyOrders].sort((a, b) => {
+        const dateA = a.type === 'appointment' ? a.start_time : a.created_at;
+        const dateB = b.type === 'appointment' ? b.start_time : b.created_at;
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+    });
     
-    // Calculate Total Spent (Only Completed/Confirmed)
-    const total = history.reduce((acc, curr) => {
-        if (curr.status === 'COMPLETED' || curr.status === 'CONFIRMED') {
-            const svc = getServiceData(curr.service_id);
-            return acc + (svc ? svc.price : 0);
+    // 4. Calculate Total Spent (Completed/Confirmed)
+    const total = merged.reduce((acc, curr) => {
+        if (curr.type === 'appointment') {
+            if (curr.status === 'COMPLETED' || curr.status === 'CONFIRMED') {
+                const svc = getServiceData(curr.service_id);
+                return acc + (svc ? svc.price : 0);
+            }
+        } else {
+            if (curr.status === 'COMPLETED') {
+                const prod = getProductData(curr.product_id);
+                return acc + (prod ? prod.price : 0);
+            }
         }
         return acc;
     }, 0);
 
-    setViewingHistory({ client, appointments: history, totalSpent: total });
+    setViewingHistory({ client, items: merged, totalSpent: total });
     setIsHistoryOpen(true);
   };
 
@@ -232,7 +258,7 @@ export const ClientsManager: React.FC = () => {
             <div className="p-6 border-b border-gold-100 flex justify-between items-center bg-gold-50 shrink-0">
               <div>
                 <h3 className="font-serif text-xl md:text-2xl font-bold text-gold-900">{viewingHistory.client.name}</h3>
-                <p className="text-gray-500 text-xs md:text-sm">Histórico de Agendamentos</p>
+                <p className="text-gray-500 text-xs md:text-sm">Histórico Completo (Serviços e Produtos)</p>
               </div>
               <button onClick={() => setIsHistoryOpen(false)} className="text-gray-400 hover:text-gray-600 p-2">
                 <span className="material-symbols-outlined">close</span>
@@ -241,34 +267,47 @@ export const ClientsManager: React.FC = () => {
             
             {/* Total Spent Badge */}
             <div className="p-4 bg-gold-100/30 flex justify-between items-center border-b border-gold-100">
-                <span className="font-bold text-gold-800 text-sm uppercase">Total Gasto</span>
+                <span className="font-bold text-gold-800 text-sm uppercase">Total Investido</span>
                 <span className="font-serif text-xl font-bold text-gold-900">R$ {viewingHistory.totalSpent.toFixed(2)}</span>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-              {viewingHistory.appointments.length === 0 ? (
-                <p className="text-center text-gray-400 py-10">Nenhum histórico encontrado.</p>
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
+              {viewingHistory.items.length === 0 ? (
+                <p className="text-center text-gray-400 py-10">Nenhuma interação registrada.</p>
               ) : (
-                viewingHistory.appointments.map(appt => {
-                  const svc = getServiceData(appt.service_id);
+                viewingHistory.items.map((item, idx) => {
+                  const isAppt = item.type === 'appointment';
+                  // Get Details based on type
+                  const details = isAppt 
+                        ? getServiceData((item as Appointment).service_id)
+                        : getProductData((item as Order).product_id);
+                  
+                  const name = details ? details.name : (isAppt ? 'Serviço Removido' : 'Produto Removido');
+                  const price = details ? details.price : 0;
+                  const date = isAppt ? (item as Appointment).start_time : (item as Order).created_at;
+
                   return (
-                    <div key={appt.id} className="border border-gray-100 rounded-xl p-4 hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                      <div>
-                        <p className="font-bold text-gold-900">{svc ? svc.name : 'Serviço excluído'}</p>
-                        <p className="text-xs md:text-sm text-gray-500 capitalize flex items-center gap-1">
-                          <span className="material-symbols-outlined text-xs">calendar_today</span>
-                          {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(appt.start_time))}
-                        </p>
-                        {svc && <p className="text-xs font-bold text-gray-400 mt-1">R$ {svc.price.toFixed(2)}</p>}
+                    <div key={`${item.id}-${idx}`} className="border border-gray-100 rounded-xl p-4 hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                      <div className="flex gap-3 items-center">
+                         <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isAppt ? 'bg-purple-50 text-purple-600' : 'bg-orange-50 text-orange-600'}`}>
+                             <span className="material-symbols-outlined">{isAppt ? 'spa' : 'shopping_bag'}</span>
+                         </div>
+                         <div>
+                            <p className="font-bold text-gray-800 text-sm">{name}</p>
+                            <p className="text-xs text-gray-500 capitalize flex items-center gap-1">
+                              {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(date))}
+                            </p>
+                            <p className="text-xs font-bold text-gold-600 mt-0.5">R$ {price.toFixed(2)}</p>
+                         </div>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold w-fit ${
-                        appt.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
-                        appt.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
-                        appt.status === 'COMPLETED' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold w-fit ${
+                        item.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
+                        item.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
+                        item.status === 'COMPLETED' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
                       }`}>
-                        {appt.status === 'CONFIRMED' ? 'Confirmado' : 
-                         appt.status === 'CANCELLED' ? 'Cancelado' : 
-                         appt.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
+                        {item.status === 'CONFIRMED' ? 'Confirmado' : 
+                         item.status === 'CANCELLED' ? 'Cancelado' : 
+                         item.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
                       </span>
                     </div>
                   );
