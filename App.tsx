@@ -16,6 +16,7 @@ import { ServicesManager } from './pages/admin/ServicesManager';
 import { Settings } from './pages/admin/Settings';
 import { ProductsManager } from './pages/admin/ProductsManager';
 import { ClientsManager } from './pages/admin/ClientsManager';
+import { OrdersManager } from './pages/admin/OrdersManager';
 
 // Mock Auth wrapper for Admin
 const ProtectedRoute = () => {
@@ -44,6 +45,7 @@ const App: React.FC = () => {
         <Route path="/admin" element={<ProtectedRoute />}>
            <Route index element={<AdminRouteWrapper title="Dashboard" component={Dashboard} />} />
            <Route path="schedule" element={<AdminRouteWrapper title="Agenda" component={Schedule} />} />
+           <Route path="orders" element={<AdminRouteWrapper title="Pedidos" component={OrdersManager} />} />
            <Route path="services" element={<AdminRouteWrapper title="Serviços" component={ServicesManager} />} />
            <Route path="clients" element={<AdminRouteWrapper title="Clientes" component={ClientsManager} />} />
            <Route path="products" element={<AdminRouteWrapper title="Produtos" component={ProductsManager} />} />

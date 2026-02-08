@@ -2,6 +2,7 @@
 DROP VIEW IF EXISTS public_busy_times;
 DROP TABLE IF EXISTS appointments CASCADE;
 DROP TABLE IF EXISTS blocked_times CASCADE;
+DROP TABLE IF EXISTS product_orders CASCADE;
 DROP TABLE IF EXISTS services CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS clients CASCADE;
@@ -71,6 +72,17 @@ create table if not exists appointments (
   created_at timestamptz default now()
 );
 
+-- Pedidos de Produtos (Interesse)
+create table if not exists product_orders (
+  id uuid primary key default uuid_generate_v4(),
+  salon_id uuid references salons(id) on delete cascade,
+  product_id uuid references products(id) on delete set null,
+  client_name text not null,
+  client_phone text not null,
+  status text check (status in ('PENDING', 'COMPLETED', 'CANCELLED')),
+  created_at timestamptz default now()
+);
+
 -- Bloqueios
 create table if not exists blocked_times (
   id uuid primary key default uuid_generate_v4(),
@@ -112,6 +124,7 @@ alter table products enable row level security;
 alter table clients enable row level security;
 alter table appointments enable row level security;
 alter table blocked_times enable row level security;
+alter table product_orders enable row level security;
 
 -- Políticas de Leitura
 drop policy if exists "Salons are public" on salons;
@@ -136,6 +149,9 @@ create policy "Public create clients" on clients for insert with check (true);
 drop policy if exists "Public create appointments" on appointments;
 create policy "Public create appointments" on appointments for insert with check (true);
 
+drop policy if exists "Public create orders" on product_orders;
+create policy "Public create orders" on product_orders for insert with check (true);
+
 -- Políticas de ADMIN
 drop policy if exists "Admin Full Access Salons" on salons;
 create policy "Admin Full Access Salons" on salons for all using (auth.role() = 'authenticated');
@@ -154,6 +170,9 @@ create policy "Admin Full Access Appointments" on appointments for all using (au
 
 drop policy if exists "Admin Full Access Blocks" on blocked_times;
 create policy "Admin Full Access Blocks" on blocked_times for all using (auth.role() = 'authenticated');
+
+drop policy if exists "Admin Full Access Orders" on product_orders;
+create policy "Admin Full Access Orders" on product_orders for all using (auth.role() = 'authenticated');
 
 -- Políticas de Storage
 drop policy if exists "Public Access Storage" on storage.objects;

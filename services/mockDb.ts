@@ -1,4 +1,4 @@
-import { Appointment, AppointmentStatus, Client, Product, Salon, Service, BlockedTime, DaySchedule } from '../types';
+import { Appointment, AppointmentStatus, Client, Product, Salon, Service, BlockedTime, DaySchedule, Order, OrderStatus } from '../types';
 import { supabase } from './supabaseClient';
 
 // Initial Mock Data
@@ -475,6 +475,45 @@ class ApiService {
      }
     const products = await this.getProducts();
     setStorage('products', products.filter(p => p.id !== id));
+  }
+
+  // --- Product Orders (Orders) ---
+  async getOrders(): Promise<Order[]> {
+    if (this.supabase) {
+        try {
+            const { data, error } = await this.supabase.from('product_orders').select('*');
+            if (!error && data) return data;
+        } catch(e) { console.warn(e); }
+    }
+    return getStorage<Order[]>('product_orders', []);
+  }
+
+  async createOrder(order: Order): Promise<void> {
+     if (this.supabase) {
+        try { await this.supabase.from('product_orders').insert(order); return; }
+        catch(e) { console.error(e); }
+     }
+    const orders = await this.getOrders();
+    setStorage('product_orders', [...orders, order]);
+  }
+
+  async updateOrderStatus(id: string, status: OrderStatus): Promise<void> {
+     if (this.supabase) {
+        try { await this.supabase.from('product_orders').update({ status }).eq('id', id); return; }
+        catch(e) { console.error(e); }
+     }
+    const orders = await this.getOrders();
+    const newOrders = orders.map(o => o.id === id ? { ...o, status } : o);
+    setStorage('product_orders', newOrders);
+  }
+
+  async deleteOrder(id: string): Promise<void> {
+     if (this.supabase) {
+        try { await this.supabase.from('product_orders').delete().eq('id', id); return; }
+        catch(e) { console.error(e); }
+     }
+    const orders = await this.getOrders();
+    setStorage('product_orders', orders.filter(o => o.id !== id));
   }
 }
 

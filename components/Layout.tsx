@@ -73,6 +73,7 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
         <nav className="flex-1 py-6 flex flex-col gap-1 overflow-y-auto">
           <SidebarItem icon="dashboard" label="Dashboard" to="/admin" active={location.pathname === '/admin'} onClick={closeSidebar} />
           <SidebarItem icon="calendar_month" label="Agenda" to="/admin/schedule" active={location.pathname.startsWith('/admin/schedule')} onClick={closeSidebar} />
+          <SidebarItem icon="shopping_cart" label="Pedidos" to="/admin/orders" active={location.pathname.startsWith('/admin/orders')} onClick={closeSidebar} />
           <SidebarItem icon="spa" label="Serviços" to="/admin/services" active={location.pathname.startsWith('/admin/services')} onClick={closeSidebar} />
           <SidebarItem icon="group" label="Clientes" to="/admin/clients" active={location.pathname.startsWith('/admin/clients')} onClick={closeSidebar} />
           <SidebarItem icon="inventory_2" label="Produtos" to="/admin/products" active={location.pathname.startsWith('/admin/products')} onClick={closeSidebar} />

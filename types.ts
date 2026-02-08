@@ -5,6 +5,12 @@ export enum AppointmentStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum OrderStatus {
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
 export interface TimeSlot {
   start: string; // "08:00"
   end: string;   // "12:00"
@@ -67,6 +73,18 @@ export interface Product {
   price: number;
   stock: number;
   image_url?: string;
+}
+
+export interface Order {
+  id: string;
+  salon_id: string;
+  product_id: string;
+  client_name: string;
+  client_phone: string;
+  status: OrderStatus;
+  created_at: string;
+  product_name?: string; // joined for display
+  product_price?: number; // joined for display
 }
 
 export interface User {
