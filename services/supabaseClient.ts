@@ -1,12 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Robust environment variable extraction
-const meta = import.meta as any;
-let env = meta.env || {};
+let env: any = {};
 
-// Fallback to process.env if import.meta.env is empty
-if (Object.keys(env).length === 0 && typeof process !== 'undefined' && process.env) {
-  env = process.env;
+try {
+  // Check for Vite's import.meta.env
+  if (import.meta && import.meta.env) {
+    env = import.meta.env;
+  }
+} catch (e) {
+  // Ignore errors if import.meta is not available
+}
+
+try {
+  // Fallback to process.env if available (Node.js or some bundlers)
+  // Ensure we check typeof process to avoid ReferenceError in strict browser envs
+  if (Object.keys(env).length === 0 && typeof process !== 'undefined' && process.env) {
+    env = process.env;
+  }
+} catch (e) {
+  // Ignore errors if process is not available
 }
 
 // 1. Try Environment Variables

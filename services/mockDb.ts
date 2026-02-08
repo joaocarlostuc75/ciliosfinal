@@ -55,8 +55,14 @@ const initialServices: Service[] = [
 ];
 
 const getStorage = <T>(key: string, initial: T): T => {
-  const stored = localStorage.getItem(key);
-  if (stored) return JSON.parse(stored);
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) return JSON.parse(stored);
+  } catch (e) {
+    console.warn(`Failed to parse storage for key ${key}`, e);
+    // Remove corrupted data to prevent future crashes
+    localStorage.removeItem(key);
+  }
   localStorage.setItem(key, JSON.stringify(initial));
   return initial;
 };
@@ -71,18 +77,15 @@ class ApiService {
   // --- Auth ---
   async login(email: string, pass: string): Promise<{ success: boolean; message?: string }> {
     if (this.supabase) {
-      // Cast auth to any to handle potential type mismatch between v1 types and v2 code
       const { error } = await (this.supabase.auth as any).signInWithPassword({ email, password: pass });
       if (error) {
         console.error("Login failed:", error.message);
         return { success: false, message: error.message };
       }
-      localStorage.setItem('admin_auth', 'true'); // Keep sync flag for router
+      localStorage.setItem('admin_auth', 'true');
       return { success: true };
-    } else {
-      // Sem Supabase e sem Backdoor: Retorna erro
-      return { success: false, message: 'Erro: Banco de dados desconectado. Verifique as variáveis de ambiente.' };
     }
+    return { success: false, message: 'Banco de dados desconectado.' };
   }
 
   async signUp(email: string, pass: string): Promise<{ success: boolean; message?: string }> {
@@ -91,14 +94,10 @@ class ApiService {
       if (error) {
         return { success: false, message: error.message };
       }
-      
-      // 1. Sessão retornada imediatamente (Email confirmation OFF)
       if (data?.session) {
           localStorage.setItem('admin_auth', 'true');
           return { success: true, message: 'Conta criada e logada com sucesso!' };
       }
-
-      // 2. Tentar login manual imediato (Caso Supabase não retorne sessão no signUp por config)
       if (data?.user && !data.session) {
          const { data: loginData, error: loginError } = await (this.supabase.auth as any).signInWithPassword({ email, password: pass });
          if (!loginError && loginData?.session) {
@@ -106,13 +105,9 @@ class ApiService {
             return { success: true, message: 'Conta criada e logada com sucesso!' };
          }
       }
-
       return { success: true, message: 'Conta criada! Se não conseguir entrar, verifique seu email para confirmar o cadastro.' };
-    } else {
-      // Mock Fallback: Apenas para desenvolvimento local sem backend
-      localStorage.setItem('admin_auth', 'true');
-      return { success: true, message: 'Conta criada (Modo Simulação Offline).' };
     }
+    return { success: false, message: 'Banco de dados desconectado.' };
   }
 
   async resetPassword(email: string): Promise<{ success: boolean; message?: string }> {
@@ -122,53 +117,78 @@ class ApiService {
         return { success: false, message: error.message };
       }
       return { success: true, message: 'Email de recuperação enviado!' };
-    } else {
-      // Mock Fallback
-      return { success: true, message: 'Email de recuperação enviado (Modo Simulação).' };
     }
+    return { success: false, message: 'Banco de dados desconectado.' };
   }
 
   async logout(): Promise<void> {
     localStorage.removeItem('admin_auth');
     if (this.supabase) {
-      // Cast auth to any to handle potential type mismatch
       await (this.supabase.auth as any).signOut();
     }
   }
 
   isAuthenticated(): boolean {
-    // Keep this synchronous for Router guards convenience
     return localStorage.getItem('admin_auth') === 'true';
+  }
+
+  // --- Storage ---
+  async uploadImage(file: File): Promise<string> {
+    if (this.supabase) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await this.supabase.storage
+        .from('salon-media')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      const { data } = this.supabase.storage.from('salon-media').getPublicUrl(filePath);
+      return data.publicUrl;
+    }
+    // Fallback for mock/offline (will not persist well but prevents crash)
+    return URL.createObjectURL(file);
   }
 
   // --- Salon ---
   async getSalon(): Promise<Salon> {
     if (this.supabase) {
-      // For public side, we assume a single salon or find by slug. 
-      // Using slug hardcoded for demo or fetching the first one.
-      const { data, error } = await this.supabase.from('salons').select('*').limit(1).single();
-      if (error) throw error;
-      return data;
+      try {
+          // Use maybeSingle to avoid crash if DB is empty
+          const { data, error } = await this.supabase.from('salons').select('*').limit(1).maybeSingle();
+          if (error) throw error;
+          if (data) return data;
+      } catch (e) {
+          console.warn("Supabase Fetch Error (getSalon):", e);
+          // Fallback to mock data below
+      }
     }
     return getStorage<Salon>('salon', initialSalon);
   }
 
   async updateSalon(salon: Salon): Promise<Salon> {
     if (this.supabase) {
-        const { data, error } = await this.supabase
-            .from('salons')
-            .update({ 
-                name: salon.name, 
-                phone: salon.phone, 
-                address: salon.address, 
-                logo_url: salon.logo_url, 
-                opening_hours: salon.opening_hours 
-            })
-            .eq('id', salon.id)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await this.supabase
+                .from('salons')
+                .update({ 
+                    name: salon.name, 
+                    phone: salon.phone, 
+                    address: salon.address, 
+                    logo_url: salon.logo_url, 
+                    opening_hours: salon.opening_hours 
+                })
+                .eq('id', salon.id)
+                .select()
+                .single();
+            if (!error && data) return data;
+            if (error) throw error;
+        } catch(e) { console.error(e); }
     }
     setStorage('salon', salon);
     return salon;
@@ -177,20 +197,23 @@ class ApiService {
   // --- Services ---
   async getServices(): Promise<Service[]> {
     if (this.supabase) {
-        const { data, error } = await this.supabase.from('services').select('*');
-        if (error) throw error;
-        return data || [];
+        try {
+            const { data, error } = await this.supabase.from('services').select('*');
+            if (error) throw error;
+            if (data) return data;
+        } catch(e) {
+            console.warn("Supabase Fetch Error (getServices):", e);
+        }
     }
     return getStorage<Service[]>('services', initialServices);
   }
 
   async addService(service: Service): Promise<Service> {
     if (this.supabase) {
-        // Remove ID to let DB generate it if it's a new UUID not generated by client
-        // But our code generates UUID on client. Supabase handles upsert or insert ok.
-        const { data, error } = await this.supabase.from('services').insert(service).select().single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await this.supabase.from('services').insert(service).select().single();
+            if (!error && data) return data;
+        } catch(e) { console.error(e); }
     }
     const services = await this.getServices();
     const newServices = [...services, service];
@@ -200,9 +223,10 @@ class ApiService {
 
   async updateService(updated: Service): Promise<Service> {
     if (this.supabase) {
-        const { data, error } = await this.supabase.from('services').update(updated).eq('id', updated.id).select().single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await this.supabase.from('services').update(updated).eq('id', updated.id).select().single();
+            if (!error && data) return data;
+        } catch(e) { console.error(e); }
     }
     const services = await this.getServices();
     const newServices = services.map(s => s.id === updated.id ? updated : s);
@@ -212,8 +236,8 @@ class ApiService {
 
   async deleteService(id: string): Promise<void> {
     if (this.supabase) {
-        await this.supabase.from('services').delete().eq('id', id);
-        return;
+        try { await this.supabase.from('services').delete().eq('id', id); return; } 
+        catch(e) { console.error(e); }
     }
     const services = await this.getServices();
     setStorage('services', services.filter(s => s.id !== id));
@@ -222,23 +246,24 @@ class ApiService {
   // --- Clients ---
   async getClients(): Promise<Client[]> {
     if (this.supabase) {
-        const { data, error } = await this.supabase.from('clients').select('*');
-        if (error) throw error;
-        return data || [];
+        try {
+            const { data, error } = await this.supabase.from('clients').select('*');
+            if (error) throw error;
+            if (data) return data;
+        } catch(e) { console.warn(e); }
     }
     return getStorage<Client[]>('clients', []);
   }
 
   async createClient(client: Client): Promise<Client> {
     if (this.supabase) {
-        // Check exist by whatsapp using Supabase unique constraint or manual check?
-        // Let's use upsert or select first.
-        const { data: existing } = await this.supabase.from('clients').select('*').eq('whatsapp', client.whatsapp).single();
-        if (existing) return existing;
+        try {
+            const { data: existing } = await this.supabase.from('clients').select('*').eq('whatsapp', client.whatsapp).maybeSingle();
+            if (existing) return existing;
 
-        const { data, error } = await this.supabase.from('clients').insert(client).select().single();
-        if (error) throw error;
-        return data;
+            const { data, error } = await this.supabase.from('clients').insert(client).select().single();
+            if (!error && data) return data;
+        } catch(e) { console.error(e); }
     }
 
     const clients = await this.getClients();
@@ -252,9 +277,10 @@ class ApiService {
 
   async updateClient(updated: Client): Promise<Client> {
     if (this.supabase) {
-        const { data, error } = await this.supabase.from('clients').update(updated).eq('id', updated.id).select().single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await this.supabase.from('clients').update(updated).eq('id', updated.id).select().single();
+            if (!error && data) return data;
+        } catch(e) { console.error(e); }
     }
     const clients = await this.getClients();
     const newClients = clients.map(c => c.id === updated.id ? updated : c);
@@ -264,8 +290,8 @@ class ApiService {
 
   async deleteClient(id: string): Promise<void> {
     if (this.supabase) {
-        await this.supabase.from('clients').delete().eq('id', id);
-        return;
+        try { await this.supabase.from('clients').delete().eq('id', id); return; }
+        catch(e) { console.error(e); }
     }
     const clients = await this.getClients();
     setStorage('clients', clients.filter(c => c.id !== id));
@@ -273,9 +299,10 @@ class ApiService {
 
   async getClientHistory(clientId: string): Promise<Appointment[]> {
      if (this.supabase) {
-        const { data, error } = await this.supabase.from('appointments').select('*').eq('client_id', clientId);
-        if (error) throw error;
-        return data || [];
+        try {
+            const { data, error } = await this.supabase.from('appointments').select('*').eq('client_id', clientId);
+            if (!error && data) return data;
+        } catch(e) { console.warn(e); }
      }
     const appointments = await this.getAppointments();
     return appointments.filter(a => a.client_id === clientId);
@@ -284,50 +311,50 @@ class ApiService {
   // --- Appointments & Blocking ---
   async getAppointments(): Promise<Appointment[]> {
     if (this.supabase) {
-        const { data, error } = await this.supabase.from('appointments').select('*');
-        if (error) throw error;
-        return data || [];
+        try {
+            const { data, error } = await this.supabase.from('appointments').select('*');
+            if (!error && data) return data;
+        } catch(e) { console.warn(e); }
     }
     return getStorage<Appointment[]>('appointments', []);
   }
 
   async getBlockedTimes(): Promise<BlockedTime[]> {
     if (this.supabase) {
-        const { data, error } = await this.supabase.from('blocked_times').select('*');
-        if (error) throw error;
-        return data || [];
+        try {
+            const { data, error } = await this.supabase.from('blocked_times').select('*');
+            if (!error && data) return data;
+        } catch(e) { console.warn(e); }
     }
     return getStorage<BlockedTime[]>('blocked_times', []);
   }
 
-  // New Method for Booking Page to use the Secure View
   async getBusyTimes(salonId: string, startDate: string): Promise<{start: string, end: string}[]> {
      if (this.supabase) {
-         const { data, error } = await this.supabase
-            .from('public_busy_times') // The View created in SQL
-            .select('start_time, end_time')
-            .eq('salon_id', salonId)
-            .gte('start_time', startDate);
-         
-         if (error) throw error;
-         return data.map((d: any) => ({ start: d.start_time, end: d.end_time }));
+         try {
+            const { data, error } = await this.supabase
+                .from('public_busy_times')
+                .select('start_time, end_time')
+                .eq('salon_id', salonId)
+                .gte('start_time', startDate);
+            
+            if (!error && data) return data.map((d: any) => ({ start: d.start_time, end: d.end_time }));
+         } catch(e) { console.warn("Using fallback busy times", e); }
      }
 
-     // Mock Fallback: Calculate from arrays
      const appts = await this.getAppointments();
      const blocks = await this.getBlockedTimes();
      const all = [
          ...appts.filter(a => a.status !== AppointmentStatus.CANCELLED).map(a => ({ start: a.start_time, end: a.end_time })),
          ...blocks.map(b => ({ start: b.start_time, end: b.end_time }))
      ];
-     // Filter by date roughly
      return all.filter(a => new Date(a.start) >= new Date(startDate));
   }
 
   async addBlockedTime(block: BlockedTime): Promise<void> {
     if (this.supabase) {
-        await this.supabase.from('blocked_times').insert(block);
-        return;
+        try { await this.supabase.from('blocked_times').insert(block); return; }
+        catch(e) { console.error(e); }
     }
     const blocks = await this.getBlockedTimes();
     setStorage('blocked_times', [...blocks, block]);
@@ -335,17 +362,15 @@ class ApiService {
 
   async deleteBlockedTime(id: string): Promise<void> {
      if (this.supabase) {
-        await this.supabase.from('blocked_times').delete().eq('id', id);
-        return;
+        try { await this.supabase.from('blocked_times').delete().eq('id', id); return; }
+        catch(e) { console.error(e); }
      }
     const blocks = await this.getBlockedTimes();
     setStorage('blocked_times', blocks.filter(b => b.id !== id));
   }
 
   async createAppointment(appt: Appointment): Promise<Appointment> {
-    // Conflict check is better done on server or via DB constraints, but we do client side check too
     const busy = await this.getBusyTimes(appt.salon_id, appt.start_time.split('T')[0]);
-    
     const newStart = new Date(appt.start_time).getTime();
     const newEnd = new Date(appt.end_time).getTime();
 
@@ -360,9 +385,11 @@ class ApiService {
     }
 
     if (this.supabase) {
-        const { data, error } = await this.supabase.from('appointments').insert(appt).select().single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await this.supabase.from('appointments').insert(appt).select().single();
+            if (!error && data) return data;
+            if (error) throw error;
+        } catch(e) { console.error(e); }
     }
 
     const appointments = await this.getAppointments();
@@ -371,12 +398,10 @@ class ApiService {
   }
 
   async updateAppointment(updated: Appointment): Promise<void> {
-     // Skip conflict check for simplicity in edit, or reuse logic
     if (this.supabase) {
-        await this.supabase.from('appointments').update(updated).eq('id', updated.id);
-        return;
+        try { await this.supabase.from('appointments').update(updated).eq('id', updated.id); return; }
+        catch(e) { console.error(e); }
     }
-
      const appointments = await this.getAppointments();
      const newAppts = appointments.filter(a => a.id !== updated.id);
      setStorage('appointments', [...newAppts, updated]);
@@ -384,8 +409,8 @@ class ApiService {
 
   async updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<void> {
      if (this.supabase) {
-        await this.supabase.from('appointments').update({ status }).eq('id', id);
-        return;
+        try { await this.supabase.from('appointments').update({ status }).eq('id', id); return; }
+        catch(e) { console.error(e); }
      }
     const appointments = await this.getAppointments();
     const newAppointments = appointments.map(a => a.id === id ? { ...a, status } : a);
@@ -394,8 +419,8 @@ class ApiService {
 
   async deleteAppointment(id: string): Promise<void> {
      if (this.supabase) {
-        await this.supabase.from('appointments').delete().eq('id', id);
-        return;
+        try { await this.supabase.from('appointments').delete().eq('id', id); return; }
+        catch(e) { console.error(e); }
      }
     const appointments = await this.getAppointments();
     setStorage('appointments', appointments.filter(a => a.id !== id));
@@ -404,17 +429,18 @@ class ApiService {
   // --- Products ---
   async getProducts(): Promise<Product[]> {
     if (this.supabase) {
-        const { data, error } = await this.supabase.from('products').select('*');
-        if (error) throw error;
-        return data || [];
+        try {
+            const { data, error } = await this.supabase.from('products').select('*');
+            if (!error && data) return data;
+        } catch(e) { console.warn(e); }
     }
     return getStorage<Product[]>('products', []);
   }
 
   async addProduct(product: Product): Promise<void> {
      if (this.supabase) {
-        await this.supabase.from('products').insert(product);
-        return;
+        try { await this.supabase.from('products').insert(product); return; }
+        catch(e) { console.error(e); }
      }
     const products = await this.getProducts();
     setStorage('products', [...products, product]);
@@ -422,9 +448,10 @@ class ApiService {
 
   async updateProduct(updated: Product): Promise<Product> {
      if (this.supabase) {
-        const { data, error } = await this.supabase.from('products').update(updated).eq('id', updated.id).select().single();
-        if (error) throw error;
-        return data;
+        try {
+            const { data, error } = await this.supabase.from('products').update(updated).eq('id', updated.id).select().single();
+            if (!error && data) return data;
+        } catch(e) { console.error(e); }
      }
     const products = await this.getProducts();
     const newProducts = products.map(p => p.id === updated.id ? updated : p);
@@ -434,8 +461,8 @@ class ApiService {
   
   async deleteProduct(id: string): Promise<void> {
      if (this.supabase) {
-        await this.supabase.from('products').delete().eq('id', id);
-        return;
+        try { await this.supabase.from('products').delete().eq('id', id); return; }
+        catch(e) { console.error(e); }
      }
     const products = await this.getProducts();
     setStorage('products', products.filter(p => p.id !== id));

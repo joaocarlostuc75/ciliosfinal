@@ -6,18 +6,52 @@ import { Salon } from '../../types';
 export const Splash: React.FC = () => {
   const navigate = useNavigate();
   const [salon, setSalon] = useState<Salon | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     const load = async () => {
-      setSalon(await db.getSalon());
+      try {
+        const data = await db.getSalon();
+        if (data) {
+           setSalon(data);
+        } else {
+           setError(true);
+        }
+      } catch (e) {
+        console.error("Failed to load salon:", e);
+        setError(true);
+      }
     };
     load();
   }, []);
 
-  if (!salon) return null;
+  if (error) {
+     return (
+         <div className="min-h-screen bg-luxury-light flex items-center justify-center p-8 text-center">
+            <div>
+                <h1 className="text-xl font-bold text-red-500 mb-4">Erro ao carregar</h1>
+                <p className="text-gray-600 mb-6">Não foi possível carregar as informações do salão.</p>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="px-6 py-2 bg-gold-500 text-white rounded-lg"
+                >
+                  Tentar Novamente
+                </button>
+            </div>
+         </div>
+     );
+  }
+
+  if (!salon) {
+      return (
+          <div className="min-h-screen bg-luxury-light flex items-center justify-center">
+             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold-600"></div>
+          </div>
+      );
+  }
 
   return (
-    <div className="min-h-screen bg-luxury-light flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-luxury-light flex flex-col relative overflow-hidden animate-fade-in">
       {/* Background Ornament */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-gold-100 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2 pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-80 h-80 bg-gold-100 rounded-full blur-3xl opacity-50 translate-y-1/3 -translate-x-1/3 pointer-events-none" />
