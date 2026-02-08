@@ -120,6 +120,9 @@ create policy "Salons are public" on salons for select using (true);
 drop policy if exists "Services are public" on services;
 create policy "Services are public" on services for select using (true);
 
+drop policy if exists "Products are public" on products;
+create policy "Products are public" on products for select using (true);
+
 drop policy if exists "Busy times are public" on blocked_times;
 create policy "Busy times are public" on blocked_times for select using (true); 
 
@@ -217,3 +220,13 @@ SELECT
   90, 
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
 WHERE NOT EXISTS (SELECT 1 FROM services WHERE salon_id = 'e2c0a884-6d9e-4861-a9d5-17154238805f' AND name = 'Cílios Fio a Fio');
+
+INSERT INTO services (salon_id, name, description, price, duration_min, image_url)
+SELECT 
+  'e2c0a884-6d9e-4861-a9d5-17154238805f', 
+  'Manutenção', 
+  'Manutenção de cílios para manter o volume e formato por mais tempo.', 
+  80.00, 
+  60, 
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
+WHERE NOT EXISTS (SELECT 1 FROM services WHERE salon_id = 'e2c0a884-6d9e-4861-a9d5-17154238805f' AND name = 'Manutenção');

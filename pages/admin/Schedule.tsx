@@ -8,6 +8,8 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+type ViewMode = 'day' | 'week' | 'month';
+
 export const Schedule: React.FC = () => {
   const [salon, setSalon] = useState<Salon | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -22,6 +24,9 @@ export const Schedule: React.FC = () => {
     d.setHours(0,0,0,0);
     return d;
   });
+
+  // View Mode State
+  const [viewMode, setViewMode] = useState<ViewMode>('day');
 
   // Modals
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
@@ -166,25 +171,154 @@ export const Schedule: React.FC = () => {
     }
   };
 
-  // --- Timeline Construction ---
-  const dailyAppointments = appointments
-    .filter(a => isSameDay(new Date(a.start_time), selectedDate))
-    .map(a => ({ ...a, type: 'appointment' as const }));
+  // --- Timeline Construction Helper ---
+  const getItemsForDate = (date: Date) => {
+      const viewStart = new Date(date); viewStart.setHours(0,0,0,0);
+      const viewEnd = endOfDay(date);
 
-  const viewStart = new Date(selectedDate); viewStart.setHours(0,0,0,0);
-  const viewEnd = endOfDay(selectedDate);
+      const dailyAppointments = appointments
+        .filter(a => isSameDay(new Date(a.start_time), date))
+        .map(a => ({ ...a, type: 'appointment' as const }));
 
-  const dailyBlocks = blockedTimes
-    .filter(b => {
-        const blockStart = new Date(b.start_time);
-        const blockEnd = new Date(b.end_time);
-        return areIntervalsOverlapping({ start: blockStart, end: blockEnd }, { start: viewStart, end: viewEnd });
-    })
-    .map(b => ({ ...b, type: 'block' as const }));
+      const dailyBlocks = blockedTimes
+        .filter(b => {
+            const blockStart = new Date(b.start_time);
+            const blockEnd = new Date(b.end_time);
+            return areIntervalsOverlapping({ start: blockStart, end: blockEnd }, { start: viewStart, end: viewEnd });
+        })
+        .map(b => ({ ...b, type: 'block' as const }));
 
-  const timelineItems = [...dailyAppointments, ...dailyBlocks].sort((a, b) => {
-     return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-  });
+      return [...dailyAppointments, ...dailyBlocks].sort((a, b) => {
+         return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+      });
+  };
+
+  // --- Component: Render a single day's list ---
+  const renderDayGroup = (date: Date, showHeader: boolean = true) => {
+      const items = getItemsForDate(date);
+      const isToday = isSameDay(date, new Date());
+      
+      if (items.length === 0 && viewMode === 'day') {
+          return (
+             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
+                <span className="material-symbols-outlined text-4xl mb-2 opacity-50">event_available</span>
+                <p>Nenhum agendamento para este dia.</p>
+             </div>
+          );
+      }
+
+      if (items.length === 0 && viewMode !== 'day') {
+           return (
+             <div className="mb-6 opacity-60">
+                {showHeader && (
+                    <h4 className="font-serif font-bold text-gray-400 mb-2 flex items-center gap-2">
+                        {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                        {isToday && <span className="bg-gold-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase">Hoje</span>}
+                    </h4>
+                )}
+                <div className="p-3 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-sm text-gray-400 text-center">
+                    Sem agendamentos
+                </div>
+             </div>
+           );
+      }
+
+      return (
+          <div className="mb-6">
+              {showHeader && (
+                <h4 className={`font-serif font-bold text-lg mb-3 flex items-center gap-2 ${isToday ? 'text-gold-700' : 'text-gray-700'}`}>
+                    {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                    {isToday && <span className="bg-gold-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase">Hoje</span>}
+                </h4>
+              )}
+              
+              <div className="space-y-3">
+                  {items.map((item) => {
+                        if (item.type === 'block') {
+                            const block = item as BlockedTime & { type: 'block' };
+                            return (
+                                <div key={block.id} className="flex gap-3 p-3 rounded-xl bg-gray-100 border border-gray-200 items-center opacity-75">
+                                    <div className="flex flex-col items-center justify-center min-w-[3.5rem] border-r border-gray-300 pr-3 text-gray-500">
+                                        <span className="font-bold text-sm">{format(new Date(block.start_time), 'HH:mm')}</span>
+                                        <span className="text-[10px]">{format(new Date(block.end_time), 'HH:mm')}</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-bold text-gray-700 uppercase tracking-wider text-xs flex items-center gap-2">
+                                           <span className="material-symbols-outlined text-sm">lock</span>
+                                           Bloqueado
+                                        </h4>
+                                        <p className="text-gray-500 italic text-xs truncate">{block.reason || 'Sem motivo'}</p>
+                                    </div>
+                                    <button onClick={() => handleDeleteBlock(block.id)} className="text-red-400 hover:text-red-600 p-1">
+                                        <span className="material-symbols-outlined text-lg">delete</span>
+                                    </button>
+                                </div>
+                            );
+                        } else {
+                            const appt = item as Appointment & { type: 'appointment' };
+                            const client = getClientData(appt.client_id);
+                            const isCancelled = appt.status === AppointmentStatus.CANCELLED;
+                            
+                            return (
+                                <div key={appt.id} className={`group relative flex flex-col sm:flex-row gap-3 p-3 rounded-xl border transition-all ${
+                                    isCancelled ? 'bg-red-50 border-red-100 opacity-60' : 'bg-white hover:bg-gold-50/30 border-gray-100 hover:border-gold-200 shadow-sm hover:shadow-md'
+                                }`}>
+                                    {/* Time Column */}
+                                    <div className="flex sm:flex-col items-center sm:justify-center gap-2 sm:gap-0 sm:min-w-[4rem] sm:border-r border-gold-100 sm:pr-3">
+                                        <span className={`text-lg font-bold ${isCancelled ? 'text-red-400 line-through' : 'text-gold-900'}`}>
+                                            {format(new Date(appt.start_time), 'HH:mm')}
+                                        </span>
+                                        <span className="text-xs text-gray-400 hidden sm:block">{format(new Date(appt.end_time), 'HH:mm')}</span>
+                                    </div>
+                                    
+                                    {/* Info Column */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <h4 className="font-bold text-gray-800 text-base truncate">{client?.name || 'Cliente'}</h4>
+                                            {isCancelled && <span className="text-[10px] bg-red-200 text-red-800 px-1.5 py-0.5 rounded font-bold">CANCELADO</span>}
+                                        </div>
+                                        <p className="text-gold-600 font-medium text-sm truncate">{getServiceName(appt.service_id)}</p>
+                                        <p className="text-gray-400 text-xs mt-1 flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[10px]">phone</span>
+                                            {client?.whatsapp}
+                                        </p>
+                                    </div>
+
+                                    {/* Action Bar */}
+                                    <div className="flex items-center justify-end gap-1 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                                        {!isCancelled && (
+                                            <>
+                                                <button onClick={() => handleNotifyClient(appt)} title="Notificar WhatsApp" className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors">
+                                                    <span className="material-symbols-outlined text-xl">whatsapp</span>
+                                                </button>
+                                                <button onClick={() => handleUpdateStatus(appt.id, AppointmentStatus.COMPLETED)} title="Concluir" className="p-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors">
+                                                    <span className="material-symbols-outlined text-xl">check_small</span>
+                                                </button>
+                                                <button onClick={() => handleOpenReschedule(appt)} title="Remarcar" className="p-2 text-orange-500 hover:bg-orange-50 rounded-full transition-colors">
+                                                    <span className="material-symbols-outlined text-xl">edit_calendar</span>
+                                                </button>
+                                                <button onClick={() => handleUpdateStatus(appt.id, AppointmentStatus.CANCELLED)} title="Cancelar" className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors">
+                                                    <span className="material-symbols-outlined text-xl">block</span>
+                                                </button>
+                                            </>
+                                        )}
+                                        {isCancelled && (
+                                            <button onClick={() => handleUpdateStatus(appt.id, AppointmentStatus.CONFIRMED)} title="Restaurar" className="p-2 text-green-500 hover:bg-green-50 rounded-full">
+                                                <span className="material-symbols-outlined text-xl">undo</span>
+                                            </button>
+                                        )}
+                                        <button onClick={() => handleDeleteAppointment(appt.id)} title="Excluir" className="p-2 text-gray-300 hover:bg-gray-100 hover:text-red-600 rounded-full ml-1">
+                                            <span className="material-symbols-outlined text-xl">delete</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        }
+                  })}
+              </div>
+          </div>
+      );
+  };
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6">
@@ -257,118 +391,82 @@ export const Schedule: React.FC = () => {
 
        {/* Right/Bottom Column: Timeline List */}
        <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-lg border border-gold-100 overflow-hidden h-[600px] xl:h-auto">
-            {/* List Header */}
-            <div className="p-4 border-b border-gold-100 bg-gold-50/30 flex justify-between items-center sticky top-0 z-10 backdrop-blur">
-                <div>
-                    <h3 className="font-serif font-bold text-xl text-gold-900 capitalize">
-                        {format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-                    </h3>
-                    <p className="text-xs text-gray-500">
-                        {timelineItems.filter(i => i.type === 'appointment').length} agendamentos
-                    </p>
+            {/* List Header & Filters */}
+            <div className="p-4 border-b border-gold-100 bg-gold-50/30 flex flex-col sm:flex-row justify-between items-center sticky top-0 z-10 backdrop-blur gap-3">
+                <div className="flex items-center gap-2 bg-white rounded-lg p-1 shadow-sm border border-gold-100">
+                    <button 
+                        onClick={() => setViewMode('day')}
+                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'day' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
+                    >
+                        Dia
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('week')}
+                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'week' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
+                    >
+                        Semana
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('month')}
+                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'month' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
+                    >
+                        Mês
+                    </button>
                 </div>
+
                 {/* Mobile Action Button */}
-                <button onClick={openBlockModal} className="md:hidden text-gray-600 p-2 bg-white rounded-lg shadow-sm border border-gray-200">
-                    <span className="material-symbols-outlined">block</span>
+                <button onClick={openBlockModal} className="md:hidden w-full sm:w-auto text-gray-700 p-2 bg-white rounded-lg shadow-sm border border-gray-200 flex justify-center items-center gap-2 font-bold text-xs">
+                    <span className="material-symbols-outlined text-sm">block</span>
+                    Bloquear
                 </button>
             </div>
 
-            {/* List Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {timelineItems.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400 py-12">
-                        <span className="material-symbols-outlined text-4xl mb-2 opacity-50">event_available</span>
-                        <p>Nenhum agendamento para este dia.</p>
-                    </div>
-                ) : (
-                    timelineItems.map((item) => {
-                        if (item.type === 'block') {
-                            const block = item as BlockedTime & { type: 'block' };
-                            return (
-                                <div key={block.id} className="flex gap-3 p-3 rounded-xl bg-gray-100 border border-gray-200 items-center opacity-75">
-                                    <div className="flex flex-col items-center justify-center min-w-[3.5rem] border-r border-gray-300 pr-3 text-gray-500">
-                                        <span className="font-bold text-sm">{format(new Date(block.start_time), 'HH:mm')}</span>
-                                        <span className="text-[10px]">{format(new Date(block.end_time), 'HH:mm')}</span>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="font-bold text-gray-700 uppercase tracking-wider text-xs flex items-center gap-2">
-                                           <span className="material-symbols-outlined text-sm">lock</span>
-                                           Bloqueado
-                                        </h4>
-                                        <p className="text-gray-500 italic text-xs truncate">{block.reason || 'Sem motivo'}</p>
-                                    </div>
-                                    <button onClick={() => handleDeleteBlock(block.id)} className="text-red-400 hover:text-red-600 p-1">
-                                        <span className="material-symbols-outlined text-lg">delete</span>
-                                    </button>
-                                </div>
-                            );
-                        } else {
-                            const appt = item as Appointment & { type: 'appointment' };
-                            const client = getClientData(appt.client_id);
-                            const isCancelled = appt.status === AppointmentStatus.CANCELLED;
-                            
-                            return (
-                                <div key={appt.id} className={`group relative flex flex-col sm:flex-row gap-3 p-3 rounded-xl border transition-all ${
-                                    isCancelled ? 'bg-red-50 border-red-100 opacity-60' : 'bg-white hover:bg-gold-50/30 border-gray-100 hover:border-gold-200 shadow-sm hover:shadow-md'
-                                }`}>
-                                    {/* Time Column */}
-                                    <div className="flex sm:flex-col items-center sm:justify-center gap-2 sm:gap-0 sm:min-w-[4rem] sm:border-r border-gold-100 sm:pr-3">
-                                        <span className={`text-lg font-bold ${isCancelled ? 'text-red-400 line-through' : 'text-gold-900'}`}>
-                                            {format(new Date(appt.start_time), 'HH:mm')}
-                                        </span>
-                                        <span className="text-xs text-gray-400 hidden sm:block">{format(new Date(appt.end_time), 'HH:mm')}</span>
-                                    </div>
-                                    
-                                    {/* Info Column */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <h4 className="font-bold text-gray-800 text-base truncate">{client?.name || 'Cliente'}</h4>
-                                            {isCancelled && <span className="text-[10px] bg-red-200 text-red-800 px-1.5 py-0.5 rounded font-bold">CANCELADO</span>}
-                                        </div>
-                                        <p className="text-gold-600 font-medium text-sm truncate">{getServiceName(appt.service_id)}</p>
-                                        <p className="text-gray-400 text-xs mt-1 flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[10px]">phone</span>
-                                            {client?.whatsapp}
-                                        </p>
-                                    </div>
+            {/* List Content based on ViewMode */}
+            <div className="flex-1 overflow-y-auto p-4">
+                
+                {/* DAY VIEW */}
+                {viewMode === 'day' && renderDayGroup(selectedDate, true)}
 
-                                    {/* Action Bar (Responsive) */}
-                                    <div className="flex items-center justify-end gap-1 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
-                                        {!isCancelled && (
-                                            <>
-                                                <button onClick={() => handleNotifyClient(appt)} title="Notificar WhatsApp" className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors">
-                                                    <span className="material-symbols-outlined text-xl">whatsapp</span>
-                                                </button>
-                                                <button onClick={() => handleUpdateStatus(appt.id, AppointmentStatus.COMPLETED)} title="Concluir" className="p-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors">
-                                                    <span className="material-symbols-outlined text-xl">check_small</span>
-                                                </button>
-                                                <button onClick={() => handleOpenReschedule(appt)} title="Remarcar" className="p-2 text-orange-500 hover:bg-orange-50 rounded-full transition-colors">
-                                                    <span className="material-symbols-outlined text-xl">edit_calendar</span>
-                                                </button>
-                                                <button onClick={() => handleUpdateStatus(appt.id, AppointmentStatus.CANCELLED)} title="Cancelar" className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors">
-                                                    <span className="material-symbols-outlined text-xl">block</span>
-                                                </button>
-                                            </>
-                                        )}
-                                        {isCancelled && (
-                                            <button onClick={() => handleUpdateStatus(appt.id, AppointmentStatus.CONFIRMED)} title="Restaurar" className="p-2 text-green-500 hover:bg-green-50 rounded-full">
-                                                <span className="material-symbols-outlined text-xl">undo</span>
-                                            </button>
-                                        )}
-                                        <button onClick={() => handleDeleteAppointment(appt.id)} title="Excluir" className="p-2 text-gray-300 hover:bg-gray-100 hover:text-red-600 rounded-full ml-1">
-                                            <span className="material-symbols-outlined text-xl">delete</span>
-                                        </button>
-                                    </div>
+                {/* WEEK VIEW */}
+                {viewMode === 'week' && (
+                    <div className="space-y-4">
+                        <div className="text-center mb-6">
+                            <span className="px-3 py-1 bg-gold-50 text-gold-800 rounded-full text-xs font-bold uppercase tracking-widest border border-gold-100">
+                                Semana de {format(startOfWeek(selectedDate), "dd 'de' MMM", { locale: ptBR })} a {format(endOfWeek(selectedDate), "dd 'de' MMM", { locale: ptBR })}
+                            </span>
+                        </div>
+                        {eachDayOfInterval({ start: startOfWeek(selectedDate), end: endOfWeek(selectedDate) })
+                            .map((day, i) => (
+                                <div key={i}>
+                                    {renderDayGroup(day, true)}
+                                    {i < 6 && <div className="border-b border-gray-100 my-4" />}
                                 </div>
-                            );
+                            ))
                         }
-                    })
+                    </div>
+                )}
+
+                {/* MONTH VIEW */}
+                {viewMode === 'month' && (
+                    <div className="space-y-4">
+                         <div className="text-center mb-6">
+                            <span className="px-3 py-1 bg-gold-50 text-gold-800 rounded-full text-xs font-bold uppercase tracking-widest border border-gold-100">
+                                {format(selectedDate, "MMMM 'de' yyyy", { locale: ptBR })}
+                            </span>
+                        </div>
+                        {eachDayOfInterval({ start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) })
+                            .map((day, i) => (
+                                <div key={i}>
+                                    {renderDayGroup(day, true)}
+                                </div>
+                            ))
+                        }
+                    </div>
                 )}
             </div>
        </div>
 
-       {/* Modals remain mostly same, just ensuring z-index and padding */}
-       {/* Block Modal */}
+       {/* Modals */}
        {isBlockModalOpen && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
               <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
@@ -403,7 +501,6 @@ export const Schedule: React.FC = () => {
            </div>
        )}
 
-       {/* Reschedule Modal */}
        {isRescheduleModalOpen && editingAppointment && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
               <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
