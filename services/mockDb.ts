@@ -1,7 +1,10 @@
-import { Appointment, AppointmentStatus, Client, Product, Salon, Service, BlockedTime, DaySchedule, Order, OrderStatus } from '../types';
+
+import { Appointment, AppointmentStatus, Client, Product, Salon, Service, BlockedTime, DaySchedule, Order, OrderStatus, SubscriptionStatus } from '../types';
 import { supabase } from './supabaseClient';
+import { differenceInDays } from 'date-fns';
 
 // Initial Mock Data
+// EMPTY FOR FRESH INSTALL
 const MOCK_SALON_ID = 'e2c0a884-6d9e-4861-a9d5-17154238805f';
 
 const defaultSchedule: DaySchedule[] = [
@@ -14,65 +17,31 @@ const defaultSchedule: DaySchedule[] = [
   { dayOfWeek: 6, isOpen: true, slots: [{ start: '09:00', end: '14:00' }] },
 ];
 
-const initialSalon: Salon = {
+// Template for NEW accounts (SignUp)
+const templateSalon: Salon = {
   id: MOCK_SALON_ID,
-  name: 'Cílios de Luxo',
-  slug: 'cilios-de-luxo',
-  logo_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ',
-  phone: '11999999999',
-  address: 'Rua F nº 143, Santa Mônica',
-  opening_hours: defaultSchedule
+  name: 'Novo Estabelecimento',
+  slug: 'novo-estabelecimento',
+  logo_url: 'https://via.placeholder.com/150?text=Logo',
+  phone: '',
+  address: '',
+  opening_hours: defaultSchedule,
+  subscription_status: SubscriptionStatus.TRIAL,
+  created_at: new Date().toISOString(),
+  owner_email: ''
 };
 
-const initialServices: Service[] = [
-  {
-    id: '1',
-    salon_id: MOCK_SALON_ID,
-    name: 'Volume Brasileiro',
-    description: 'Técnica queridinha do momento. Fios em Y para volume e leveza.',
-    price: 130.00,
-    duration_min: 105,
-    image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
-  },
-  {
-    id: '2',
-    salon_id: MOCK_SALON_ID,
-    name: 'Volume Russo',
-    description: 'Olhar dramático e sofisticado com máxima densidade.',
-    price: 150.00,
-    duration_min: 120,
-    image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
-  },
-  {
-    id: '3',
-    salon_id: MOCK_SALON_ID,
-    name: 'Cílios Fio a Fio',
-    description: 'Clássico para quem busca naturalidade e definição.',
-    price: 110.00,
-    duration_min: 90,
-    image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
-  },
-  {
-    id: '4',
-    salon_id: MOCK_SALON_ID,
-    name: 'Manutenção',
-    description: 'Manutenção de cílios para manter o volume e formato por mais tempo.',
-    price: 80.00,
-    duration_min: 60,
-    image_url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
-  }
-];
-
-const getStorage = <T>(key: string, initial: T): T => {
+const getStorage = <T>(key: string, initial: T | null): T | null => {
   try {
     const stored = localStorage.getItem(key);
     if (stored) return JSON.parse(stored);
   } catch (e) {
     console.warn(`Failed to parse storage for key ${key}`, e);
-    // Remove corrupted data to prevent future crashes
     localStorage.removeItem(key);
   }
-  localStorage.setItem(key, JSON.stringify(initial));
+  if (initial !== null) {
+      localStorage.setItem(key, JSON.stringify(initial));
+  }
   return initial;
 };
 
@@ -83,62 +52,146 @@ const setStorage = <T>(key: string, value: T) => {
 class ApiService {
   private supabase = supabase;
 
-  // --- Auth ---
-  async login(email: string, pass: string): Promise<{ success: boolean; message?: string }> {
+  // --- Auth & Security ---
+  
+  async login(email: string, pass: string): Promise<{ success: boolean; message?: string; role?: 'ADMIN' | 'SUPER_ADMIN' }> {
+    // Super Admin Credentials
+    if (email === 'jc@sistemas.com' && pass === 'admin123') {
+        localStorage.setItem('auth_role', 'SUPER_ADMIN');
+        return { success: true, role: 'SUPER_ADMIN' };
+    }
+
+    // Normal Admin Login
     if (this.supabase) {
       const { error } = await (this.supabase.auth as any).signInWithPassword({ email, password: pass });
       if (error) {
-        console.error("Login failed:", error.message);
         return { success: false, message: error.message };
       }
-      localStorage.setItem('admin_auth', 'true');
-      return { success: true };
+      localStorage.setItem('auth_role', 'ADMIN');
+      
+      const salon = await this.getSalon();
+      if (salon && !this.checkSubscriptionValidity(salon)) {
+          if (salon.subscription_status !== SubscriptionStatus.ACTIVE) {
+               return { success: false, message: 'Período de teste expirado. Regularize sua assinatura.' };
+          }
+      }
+      return { success: true, role: 'ADMIN' };
     }
-    return { success: false, message: 'Banco de dados desconectado.' };
+    
+    // Mock Logic
+    const salon = await this.getSalon();
+    // Allow login if salon exists and email matches (simple mock check) or if just created
+    if (salon && salon.owner_email === email) {
+         localStorage.setItem('auth_role', 'ADMIN');
+         return { success: true, role: 'ADMIN' };
+    } else if (!salon) {
+        return { success: false, message: 'Nenhum estabelecimento cadastrado. Crie uma conta.' };
+    }
+
+    return { success: false, message: 'Credenciais inválidas.' };
   }
 
   async signUp(email: string, pass: string): Promise<{ success: boolean; message?: string }> {
+    // Logic for new account - starts with 10 days trial
     if (this.supabase) {
       const { data, error } = await (this.supabase.auth as any).signUp({ email, password: pass });
-      if (error) {
-        return { success: false, message: error.message };
-      }
+      if (error) return { success: false, message: error.message };
       if (data?.session) {
-          localStorage.setItem('admin_auth', 'true');
+          localStorage.setItem('auth_role', 'ADMIN');
           return { success: true, message: 'Conta criada e logada com sucesso!' };
       }
-      if (data?.user && !data.session) {
-         const { data: loginData, error: loginError } = await (this.supabase.auth as any).signInWithPassword({ email, password: pass });
-         if (!loginError && loginData?.session) {
-            localStorage.setItem('admin_auth', 'true');
-            return { success: true, message: 'Conta criada e logada com sucesso!' };
-         }
-      }
-      return { success: true, message: 'Conta criada! Se não conseguir entrar, verifique seu email para confirmar o cadastro.' };
     }
-    return { success: false, message: 'Banco de dados desconectado.' };
+    
+    // Mock fallback: Create the FIRST salon in local storage
+    const newSalon = {
+        ...templateSalon,
+        id: crypto.randomUUID(), // New ID
+        owner_email: email,
+        created_at: new Date().toISOString(),
+        subscription_status: SubscriptionStatus.TRIAL
+    };
+    
+    // Overwrite existing mock data to simulate fresh tenant
+    setStorage('salon', newSalon);
+    localStorage.setItem('auth_role', 'ADMIN');
+    
+    return { success: true, message: 'Conta criada! Período de teste de 10 dias iniciado.' };
+  }
+
+  async changeEmail(newEmail: string): Promise<void> {
+      const salon = await this.getSalon();
+      if (salon) {
+        salon.owner_email = newEmail;
+        await this.updateSalon(salon);
+      }
+  }
+
+  async changePassword(newPass: string): Promise<void> {
+      if (this.supabase) {
+          const { error } = await (this.supabase.auth as any).updateUser({ password: newPass });
+          if (error) throw error;
+      }
   }
 
   async resetPassword(email: string): Promise<{ success: boolean; message?: string }> {
     if (this.supabase) {
       const { error } = await (this.supabase.auth as any).resetPasswordForEmail(email);
-      if (error) {
-        return { success: false, message: error.message };
-      }
-      return { success: true, message: 'Email de recuperação enviado!' };
+      if (error) return { success: false, message: error.message };
+      return { success: true, message: 'Email de recuperação enviado.' };
     }
-    return { success: false, message: 'Banco de dados desconectado.' };
+    return { success: true, message: 'Email de recuperação enviado (Simulado).' };
   }
 
   async logout(): Promise<void> {
-    localStorage.removeItem('admin_auth');
+    localStorage.removeItem('auth_role');
     if (this.supabase) {
       await (this.supabase.auth as any).signOut();
     }
   }
 
   isAuthenticated(): boolean {
-    return localStorage.getItem('admin_auth') === 'true';
+    return !!localStorage.getItem('auth_role');
+  }
+
+  isSuperAdmin(): boolean {
+      return localStorage.getItem('auth_role') === 'SUPER_ADMIN';
+  }
+
+  // --- Subscription Logic ---
+
+  checkSubscriptionValidity(salon: Salon | null): boolean {
+      if (!salon) return false;
+      if (salon.subscription_status === SubscriptionStatus.ACTIVE) return true;
+      if (salon.subscription_status === SubscriptionStatus.BLOCKED) return false;
+      if (salon.subscription_status === SubscriptionStatus.EXPIRED) return false;
+
+      // Check Trial
+      if (salon.subscription_status === SubscriptionStatus.TRIAL) {
+          const daysUsed = differenceInDays(new Date(), new Date(salon.created_at));
+          if (daysUsed > 10) {
+              salon.subscription_status = SubscriptionStatus.EXPIRED;
+              this.updateSalon(salon);
+              return false;
+          }
+          return true;
+      }
+      return false;
+  }
+
+  // --- Super Admin Capabilities ---
+
+  async getAllSalons(): Promise<Salon[]> {
+      const current = await this.getSalon();
+      if (!current) return [];
+      return [current];
+  }
+
+  async toggleSalonStatus(salonId: string, status: SubscriptionStatus): Promise<void> {
+      const salon = await this.getSalon();
+      if (salon && salon.id === salonId) {
+          salon.subscription_status = status;
+          await this.updateSalon(salon);
+      }
   }
 
   // --- Storage ---
@@ -160,24 +213,22 @@ class ApiService {
       const { data } = this.supabase.storage.from('salon-media').getPublicUrl(filePath);
       return data.publicUrl;
     }
-    // Fallback for mock/offline (will not persist well but prevents crash)
     return URL.createObjectURL(file);
   }
 
   // --- Salon ---
-  async getSalon(): Promise<Salon> {
+  async getSalon(): Promise<Salon | null> {
     if (this.supabase) {
       try {
-          // Use maybeSingle to avoid crash if DB is empty
           const { data, error } = await this.supabase.from('salons').select('*').limit(1).maybeSingle();
           if (error) throw error;
           if (data) return data;
       } catch (e) {
           console.warn("Supabase Fetch Error (getSalon):", e);
-          // Fallback to mock data below
       }
     }
-    return getStorage<Salon>('salon', initialSalon);
+    // Return null if no salon is configured (Fresh install state)
+    return getStorage<Salon | null>('salon', null);
   }
 
   async updateSalon(salon: Salon): Promise<Salon> {
@@ -190,7 +241,9 @@ class ApiService {
                     phone: salon.phone, 
                     address: salon.address, 
                     logo_url: salon.logo_url, 
-                    opening_hours: salon.opening_hours 
+                    opening_hours: salon.opening_hours,
+                    subscription_status: salon.subscription_status,
+                    owner_email: salon.owner_email
                 })
                 .eq('id', salon.id)
                 .select()
@@ -208,13 +261,11 @@ class ApiService {
     if (this.supabase) {
         try {
             const { data, error } = await this.supabase.from('services').select('*');
-            if (error) throw error;
-            if (data) return data;
-        } catch(e) {
-            console.warn("Supabase Fetch Error (getServices):", e);
-        }
+            if (!error && data) return data;
+        } catch(e) { console.warn(e); }
     }
-    return getStorage<Service[]>('services', initialServices);
+    // Empty default for fresh install
+    return getStorage<Service[]>('services', []);
   }
 
   async addService(service: Service): Promise<Service> {
@@ -265,6 +316,11 @@ class ApiService {
   }
 
   async createClient(client: Client): Promise<Client> {
+    const salon = await this.getSalon();
+    if (!this.checkSubscriptionValidity(salon)) {
+        throw new Error("O estabelecimento está temporariamente indisponível. Entre em contato diretamente.");
+    }
+
     if (this.supabase) {
         try {
             const { data: existing } = await this.supabase.from('clients').select('*').eq('whatsapp', client.whatsapp).maybeSingle();
@@ -328,7 +384,6 @@ class ApiService {
   async getClientOrders(phone: string): Promise<Order[]> {
     const cleanPhone = phone.replace(/\D/g, '');
     const orders = await this.getOrders();
-    // Filter by phone number since there is no client_id FK on orders table currently
     return orders.filter(o => o.client_phone.replace(/\D/g, '') === cleanPhone);
   }
 
@@ -504,6 +559,11 @@ class ApiService {
   }
 
   async createOrder(order: Order): Promise<void> {
+     const salon = await this.getSalon();
+     if (!this.checkSubscriptionValidity(salon)) {
+         throw new Error("O estabelecimento está temporariamente indisponível para novos pedidos.");
+     }
+
      if (this.supabase) {
         try { await this.supabase.from('product_orders').insert(order); return; }
         catch(e) { console.error(e); }

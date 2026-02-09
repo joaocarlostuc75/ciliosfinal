@@ -10,6 +10,7 @@ export const Booking: React.FC = () => {
   const [service, setService] = useState<Service | null>(null);
   const [salon, setSalon] = useState<Salon | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
+  const [subscriptionValid, setSubscriptionValid] = useState(true);
   
   // Step 1: Date & Time
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -29,6 +30,8 @@ export const Booking: React.FC = () => {
     const init = async () => {
         const s = await db.getSalon();
         setSalon(s);
+        setSubscriptionValid(db.checkSubscriptionValidity(s));
+
         if (serviceId) {
             const services = await db.getServices();
             const found = services.find(x => x.id === serviceId);
@@ -105,10 +108,26 @@ export const Booking: React.FC = () => {
     fetchSlots();
   }, [selectedDate, service, salon]);
 
+  const formatPhone = (value: string) => {
+    return value
+      .replace(/\D/g, "")
+      .replace(/^(\d{2})(\d)/g, "($1) $2")
+      .replace(/(\d)(\d{4})$/, "$1-$2")
+      .slice(0, 15);
+  };
+
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSlot || !service || !salon) return;
     
+    // Final check logic inside DB method too
+    if (!subscriptionValid) return;
+
+    if (clientPhone.replace(/\D/g, '').length < 10) {
+        alert('Por favor, insira um número de WhatsApp válido.');
+        return;
+    }
+
     setLoading(true);
 
     try {
@@ -188,12 +207,11 @@ export const Booking: React.FC = () => {
             <div className="animate-fade-in">
                 <h3 className="font-serif text-xl font-bold text-gold-900 mb-4">Escolha o Horário</h3>
                 
-                {/* Date Picker (Simplified Horizontal Scroll) */}
+                {/* Date Picker */}
                 <div className="flex gap-2 overflow-x-auto pb-4 mb-4 no-scrollbar">
                     {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(offset => {
                         const date = addDays(new Date(), offset);
                         const isSelected = format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-                        // Visual check if shop is open this day (simple check)
                         const dayConfig = salon?.opening_hours.find(d => d.dayOfWeek === date.getDay());
                         const isClosed = !dayConfig?.isOpen;
 
@@ -253,51 +271,62 @@ export const Booking: React.FC = () => {
             <div className="animate-fade-in">
                  <h3 className="font-serif text-xl font-bold text-gold-900 mb-6">Seus Dados</h3>
                  
-                 <form onSubmit={handleBooking} className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gold-700 uppercase tracking-wider ml-1">Nome Completo</label>
-                        <input 
-                            required
-                            type="text"
-                            value={clientName}
-                            onChange={e => setClientName(e.target.value)}
-                            className="w-full bg-white border border-gold-200 rounded-xl px-4 py-3 text-gold-900 outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500 transition-all"
-                            placeholder="Seu nome"
-                        />
-                    </div>
-                    
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gold-700 uppercase tracking-wider ml-1">WhatsApp</label>
-                        <input 
-                            required
-                            type="tel"
-                            value={clientPhone}
-                            onChange={e => setClientPhone(e.target.value)}
-                            className="w-full bg-white border border-gold-200 rounded-xl px-4 py-3 text-gold-900 outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500 transition-all"
-                            placeholder="(00) 00000-0000"
-                        />
-                    </div>
+                 {!subscriptionValid ? (
+                     <div className="bg-red-50 border border-red-200 p-6 rounded-2xl text-center">
+                         <span className="material-symbols-outlined text-4xl text-red-400 mb-2">error</span>
+                         <h4 className="font-bold text-red-700 mb-1">Estabelecimento Indisponível</h4>
+                         <p className="text-sm text-red-600">
+                             No momento não é possível realizar agendamentos online para este estabelecimento. Entre em contato diretamente.
+                         </p>
+                     </div>
+                 ) : (
+                    <form onSubmit={handleBooking} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gold-700 uppercase tracking-wider ml-1">Nome Completo</label>
+                            <input 
+                                required
+                                type="text"
+                                value={clientName}
+                                onChange={e => setClientName(e.target.value)}
+                                className="w-full bg-white border border-gold-200 rounded-xl px-4 py-3 text-gold-900 outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500 transition-all"
+                                placeholder="Seu nome"
+                            />
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gold-700 uppercase tracking-wider ml-1">WhatsApp</label>
+                            <input 
+                                required
+                                type="tel"
+                                value={clientPhone}
+                                onChange={e => setClientPhone(formatPhone(e.target.value))}
+                                className="w-full bg-white border border-gold-200 rounded-xl px-4 py-3 text-gold-900 outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500 transition-all"
+                                placeholder="(00) 00000-0000"
+                                maxLength={15}
+                            />
+                        </div>
 
-                    <div className="bg-gold-100/50 p-4 rounded-xl border border-gold-200/50 flex gap-3 items-start">
-                        <span className="material-symbols-outlined text-gold-600">info</span>
-                        <p className="text-xs text-gold-800 leading-relaxed">
-                            Ao confirmar, você será redirecionado para o WhatsApp (em uma nova aba) para finalizar o agendamento com nossa recepção.
-                        </p>
-                    </div>
+                        <div className="bg-gold-100/50 p-4 rounded-xl border border-gold-200/50 flex gap-3 items-start">
+                            <span className="material-symbols-outlined text-gold-600">info</span>
+                            <p className="text-xs text-gold-800 leading-relaxed">
+                                Ao confirmar, você será redirecionado para o WhatsApp (em uma nova aba) para finalizar o agendamento com nossa recepção.
+                            </p>
+                        </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-[#25D366] text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg hover:bg-[#128C7E] transition-colors flex items-center justify-center gap-2"
-                    >
-                        {loading ? 'Processando...' : (
-                            <>
-                                <span className="material-symbols-outlined">chat</span>
-                                Confirmar no WhatsApp
-                            </>
-                        )}
-                    </button>
-                 </form>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-[#25D366] text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg hover:bg-[#128C7E] transition-colors flex items-center justify-center gap-2"
+                        >
+                            {loading ? 'Processando...' : (
+                                <>
+                                    <span className="material-symbols-outlined">chat</span>
+                                    Confirmar no WhatsApp
+                                </>
+                            )}
+                        </button>
+                    </form>
+                 )}
             </div>
         )}
 

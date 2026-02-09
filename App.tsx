@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { db } from './services/mockDb';
@@ -19,11 +20,19 @@ import { Settings } from './pages/admin/Settings';
 import { ProductsManager } from './pages/admin/ProductsManager';
 import { ClientsManager } from './pages/admin/ClientsManager';
 import { OrdersManager } from './pages/admin/OrdersManager';
+import { SuperDashboard } from './pages/superadmin/SuperDashboard';
 
 // Mock Auth wrapper for Admin
 const ProtectedRoute = () => {
   const isAuthenticated = db.isAuthenticated();
+  const isSuper = db.isSuperAdmin();
+  if (isSuper) return <Navigate to="/super-admin" />;
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" />;
+};
+
+const SuperAdminRoute = () => {
+    const isSuper = db.isSuperAdmin();
+    return isSuper ? <Outlet /> : <Navigate to="/login" />;
 };
 
 // Admin Wrapper to inject Layout
@@ -54,6 +63,11 @@ const App: React.FC = () => {
            <Route path="clients" element={<AdminRouteWrapper title="Clientes" component={ClientsManager} />} />
            <Route path="products" element={<AdminRouteWrapper title="Produtos" component={ProductsManager} />} />
            <Route path="settings" element={<AdminRouteWrapper title="Configurações" component={Settings} />} />
+        </Route>
+
+        {/* Super Admin Routes */}
+        <Route path="/super-admin" element={<SuperAdminRoute />}>
+            <Route index element={<SuperDashboard />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" />} />

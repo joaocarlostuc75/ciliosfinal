@@ -9,6 +9,11 @@ export const Settings: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Salon>>({});
   const [schedule, setSchedule] = useState<DaySchedule[]>([]);
   const [previewLogo, setPreviewLogo] = useState<string>('');
+  
+  // Security Form
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -20,12 +25,26 @@ export const Settings: React.FC = () => {
         setFormData(currentSalon);
         setSchedule(currentSalon.opening_hours || []);
         setPreviewLogo(currentSalon.logo_url);
+        setEmail(currentSalon.owner_email || '');
     };
     fetchSalon();
   }, []);
 
+  const formatPhone = (value: string) => {
+    return value
+      .replace(/\D/g, "")
+      .replace(/^(\d{2})(\d)/g, "($1) $2")
+      .replace(/(\d)(\d{4})$/, "$1-$2")
+      .slice(0, 15);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+    
+    if (name === 'phone') {
+        value = formatPhone(value);
+    }
+
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -74,13 +93,30 @@ export const Settings: React.FC = () => {
     e.preventDefault();
     if (!salon) return;
 
+    // Basic Validation
+    if (formData.phone && formData.phone.replace(/\D/g, '').length < 10) {
+        setMessage({ type: 'error', text: 'Telefone inválido. Digite DDD + Número.' });
+        setTimeout(() => setMessage(null), 3000);
+        return;
+    }
+
     setIsSaving(true);
     setMessage(null);
 
     try {
       const updatedSalon = { ...salon, ...formData, opening_hours: schedule } as Salon;
       await db.updateSalon(updatedSalon);
+      
+      // Update Security Settings
+      if (email !== salon.owner_email) {
+          await db.changeEmail(email);
+      }
+      if (password) {
+          await db.changePassword(password);
+      }
+
       setSalon(updatedSalon);
+      setPassword(''); // Clear password field
       setMessage({ type: 'success', text: 'Configurações salvas com sucesso!' });
     } catch (error) {
       setMessage({ type: 'error', text: 'Erro ao salvar configurações.' });
@@ -163,10 +199,12 @@ export const Settings: React.FC = () => {
                       <div className="space-y-2">
                          <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">Telefone (WhatsApp)</label>
                          <input 
-                            type="text" 
+                            type="tel" 
                             name="phone"
                             value={formData.phone || ''}
                             onChange={handleChange}
+                            placeholder="(00) 00000-0000"
+                            maxLength={15}
                             className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-200 transition-all"
                          />
                       </div>
@@ -182,6 +220,35 @@ export const Settings: React.FC = () => {
                          className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-200 transition-all"
                       />
                    </div>
+                </div>
+             </div>
+
+             {/* Account Security Section */}
+             <div className="pt-8 border-t border-gold-100">
+                <h3 className="font-serif text-xl font-bold text-gold-900 mb-6 flex items-center gap-2">
+                    <span className="material-symbols-outlined">security</span>
+                    Segurança da Conta
+                </h3>
+                <div className="grid md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-xl border border-gray-100">
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">E-mail de Acesso</label>
+                        <input 
+                            type="email" 
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-gold-500"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">Alterar Senha</label>
+                        <input 
+                            type="password" 
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            placeholder="Deixe em branco para manter a atual"
+                            className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-gold-500"
+                        />
+                    </div>
                 </div>
              </div>
 

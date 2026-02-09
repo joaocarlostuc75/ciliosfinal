@@ -1,3 +1,4 @@
+
 -- LIMPEZA TOTAL (Necessária para corrigir conflitos de esquema antigos)
 DROP VIEW IF EXISTS public_busy_times;
 DROP TABLE IF EXISTS appointments CASCADE;
@@ -23,6 +24,8 @@ create table if not exists salons (
   address text,
   theme_color text,
   opening_hours jsonb default '[]'::jsonb,
+  subscription_status text default 'TRIAL' check (subscription_status in ('TRIAL', 'ACTIVE', 'EXPIRED', 'BLOCKED')),
+  owner_email text,
   created_at timestamptz default now()
 );
 
@@ -190,7 +193,7 @@ create policy "Admin Delete Storage" on storage.objects for delete using ( bucke
 -- 6. SEED DATA
 
 -- Insere o Salão (Agora a tabela estará limpa e correta)
-INSERT INTO salons (id, name, slug, phone, address, logo_url, opening_hours)
+INSERT INTO salons (id, name, slug, phone, address, logo_url, opening_hours, subscription_status, owner_email)
 VALUES (
   'e2c0a884-6d9e-4861-a9d5-17154238805f', 
   'Cílios de Luxo', 
@@ -206,7 +209,9 @@ VALUES (
     {"dayOfWeek": 4, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]},
     {"dayOfWeek": 5, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]},
     {"dayOfWeek": 6, "isOpen": true, "slots": [{"start": "09:00", "end": "14:00"}]}
-  ]'::jsonb
+  ]'::jsonb,
+  'TRIAL',
+  'admin@cilios.com'
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Insere Serviços Iniciais

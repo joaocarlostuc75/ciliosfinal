@@ -1,18 +1,21 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
-import { Service, Product } from '../../types';
+import { Service, Product, Salon } from '../../types';
 
 export const ServicesList: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'services' | 'products'>('services');
   const [services, setServices] = useState<Service[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [salon, setSalon] = useState<Salon | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setServices(await db.getServices());
       setProducts(await db.getProducts());
+      setSalon(await db.getSalon());
     };
     load();
   }, []);
@@ -24,7 +27,7 @@ export const ServicesList: React.FC = () => {
          <button onClick={() => navigate('/')} className="text-gold-700 p-2 -ml-2 hover:bg-gold-50 rounded-full transition-colors">
             <span className="material-symbols-outlined">arrow_back_ios</span>
          </button>
-         <h1 className="font-serif font-bold text-gold-900 text-lg">Cílios de Luxo</h1>
+         <h1 className="font-serif font-bold text-gold-900 text-lg">{salon?.name || 'Cílios de Luxo'}</h1>
          <button onClick={() => navigate('/my-schedule')} className="text-gold-700 p-2 hover:bg-gold-50 rounded-full transition-colors" title="Minha Agenda">
             <span className="material-symbols-outlined">event_note</span>
          </button>
@@ -34,7 +37,7 @@ export const ServicesList: React.FC = () => {
         
         {/* Intro */}
         <div className="text-center space-y-3 mt-4 animate-fade-in">
-            <h2 className="font-serif text-3xl md:text-4xl text-gold-900">Menu Exclusivo</h2>
+            <h2 className="font-serif text-3xl md:text-4xl text-gold-900">{salon?.name || 'Menu Exclusivo'}</h2>
             <div className="w-20 h-1 bg-gold-300 mx-auto rounded-full" />
             <p className="text-sm md:text-base text-gray-500 font-sans max-w-md mx-auto leading-relaxed">
                 Explore nossos procedimentos e produtos de alta qualidade selecionados para você.

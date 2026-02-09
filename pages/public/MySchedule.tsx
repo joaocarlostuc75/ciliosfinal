@@ -35,6 +35,14 @@ export const MySchedule: React.FC = () => {
     init();
   }, []);
 
+  const formatPhone = (value: string) => {
+    return value
+      .replace(/\D/g, "")
+      .replace(/^(\d{2})(\d)/g, "($1) $2")
+      .replace(/(\d)(\d{4})$/, "$1-$2")
+      .slice(0, 15);
+  };
+
   const handleSearch = async (phoneNumber: string) => {
     setLoading(true);
     setHasSearched(true);
@@ -106,10 +114,11 @@ export const MySchedule: React.FC = () => {
                       <input 
                         type="tel"
                         value={phone}
-                        onChange={e => setPhone(e.target.value)}
+                        onChange={e => setPhone(formatPhone(e.target.value))}
                         placeholder="Seu WhatsApp (apenas números)"
                         className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 outline-none focus:border-gold-500 bg-gray-50 focus:bg-white transition-all"
                         required
+                        maxLength={15}
                       />
                   </div>
                   <button 

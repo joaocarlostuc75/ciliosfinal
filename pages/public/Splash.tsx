@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
@@ -6,46 +7,55 @@ import { Salon } from '../../types';
 export const Splash: React.FC = () => {
   const navigate = useNavigate();
   const [salon, setSalon] = useState<Salon | null>(null);
-  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
         const data = await db.getSalon();
-        if (data) {
-           setSalon(data);
-        } else {
-           setError(true);
-        }
+        setSalon(data);
       } catch (e) {
         console.error("Failed to load salon:", e);
-        setError(true);
+      } finally {
+        setLoading(false);
       }
     };
     load();
   }, []);
 
-  if (error) {
-     return (
-         <div className="min-h-screen bg-luxury-light flex items-center justify-center p-8 text-center">
-            <div>
-                <h1 className="text-xl font-bold text-red-500 mb-4">Erro ao carregar</h1>
-                <p className="text-gray-600 mb-6">Não foi possível carregar as informações do salão.</p>
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="px-6 py-2 bg-gold-500 text-white rounded-lg"
-                >
-                  Tentar Novamente
-                </button>
-            </div>
-         </div>
-     );
+  if (loading) {
+      return (
+          <div className="min-h-screen bg-luxury-light flex items-center justify-center">
+             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold-600"></div>
+          </div>
+      );
   }
 
   if (!salon) {
       return (
-          <div className="min-h-screen bg-luxury-light flex items-center justify-center">
-             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold-600"></div>
+          <div className="min-h-screen bg-luxury-light flex flex-col items-center justify-center p-8 text-center animate-fade-in relative">
+             <button
+                onClick={() => navigate('/admin')}
+                className="absolute top-6 right-6 p-2 text-gold-900/20 hover:text-gold-900/60 transition-colors z-20"
+                title="Área Administrativa"
+             >
+                <span className="material-symbols-outlined text-xl">lock</span>
+             </button>
+
+             <div className="w-24 h-24 bg-gold-100 rounded-full flex items-center justify-center mb-6 text-gold-600">
+                 <span className="material-symbols-outlined text-5xl">diamond</span>
+             </div>
+             <h1 className="font-serif text-3xl font-bold text-gold-900 mb-2">J.C SISTEMAS</h1>
+             <p className="text-gray-500 mb-8 max-w-md">
+                 Sistema de gestão pronto para uso. Para começar a agendar e vender, configure seu estabelecimento.
+             </p>
+             <button 
+               onClick={() => navigate('/login')}
+               className="bg-gold-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-gold-600 transition-all flex items-center gap-2"
+             >
+               <span className="material-symbols-outlined">rocket_launch</span>
+               Começar Agora
+             </button>
           </div>
       );
   }

@@ -1,3 +1,4 @@
+
 export enum AppointmentStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -9,6 +10,13 @@ export enum OrderStatus {
   PENDING = 'PENDING',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
+}
+
+export enum SubscriptionStatus {
+  TRIAL = 'TRIAL',
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  BLOCKED = 'BLOCKED'
 }
 
 export interface TimeSlot {
@@ -31,6 +39,9 @@ export interface Salon {
   address: string;
   theme_color?: string;
   opening_hours: DaySchedule[]; // Structured data instead of string
+  subscription_status: SubscriptionStatus;
+  created_at: string; // To calculate trial period
+  owner_email?: string;
 }
 
 export interface Service {
@@ -91,6 +102,7 @@ export interface User {
   id: string;
   email: string;
   salon_id: string;
+  role: 'ADMIN' | 'SUPER_ADMIN';
 }
 
 export interface BlockedTime {

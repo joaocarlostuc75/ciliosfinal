@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { db } from '../../services/mockDb';
 import { AppointmentStatus, OrderStatus } from '../../types';
@@ -217,7 +218,7 @@ export const Dashboard: React.FC = () => {
                 <span className="text-xs text-gray-400 uppercase tracking-widest">Diário</span>
             </div>
             
-            <div className="flex-1 w-full min-h-[300px]">
+            <div className="w-full h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <defs>
@@ -262,7 +263,7 @@ export const Dashboard: React.FC = () => {
             <h3 className="font-serif text-xl font-bold text-gold-900 mb-2">Top Itens</h3>
             <p className="text-xs text-gray-400 mb-6">Serviços e Produtos mais vendidos</p>
             
-            <div className="flex-1 w-full min-h-[300px] relative">
+            <div className="w-full h-[300px] relative">
                 {topItemsData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>

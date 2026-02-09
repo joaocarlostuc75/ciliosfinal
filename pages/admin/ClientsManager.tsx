@@ -39,6 +39,14 @@ export const ClientsManager: React.FC = () => {
     c.whatsapp.includes(searchTerm)
   );
 
+  const formatPhone = (value: string) => {
+    return value
+      .replace(/\D/g, "")
+      .replace(/^(\d{2})(\d)/g, "($1) $2")
+      .replace(/(\d)(\d{4})$/, "$1-$2")
+      .slice(0, 15);
+  };
+
   const handleOpenForm = (client?: Client) => {
     if (client) {
       setEditingClient(client);
@@ -52,6 +60,12 @@ export const ClientsManager: React.FC = () => {
 
   const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (formData.whatsapp.replace(/\D/g, '').length < 10) {
+        alert('Por favor, insira um número de WhatsApp válido.');
+        return;
+    }
+
     const newClient: Client = {
       id: editingClient ? editingClient.id : crypto.randomUUID(),
       salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
@@ -240,7 +254,14 @@ export const ClientsManager: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gold-700 uppercase">WhatsApp</label>
-                <input required className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:border-gold-500" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="(00) 00000-0000" />
+                <input 
+                    required 
+                    className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:border-gold-500" 
+                    value={formData.whatsapp} 
+                    onChange={e => setFormData({...formData, whatsapp: formatPhone(e.target.value)})} 
+                    placeholder="(00) 00000-0000" 
+                    maxLength={15}
+                />
               </div>
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={() => setIsFormOpen(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-lg">Cancelar</button>

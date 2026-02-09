@@ -8,6 +8,7 @@ export const ProductOrder: React.FC = () => {
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [salon, setSalon] = useState<Salon | null>(null);
+  const [subscriptionValid, setSubscriptionValid] = useState(true);
   
   // Form Data
   const [clientName, setClientName] = useState('');
@@ -18,6 +19,8 @@ export const ProductOrder: React.FC = () => {
     const init = async () => {
         const s = await db.getSalon();
         setSalon(s);
+        setSubscriptionValid(db.checkSubscriptionValidity(s));
+
         if (productId) {
             const products = await db.getProducts();
             const found = products.find(x => x.id === productId);
@@ -27,10 +30,23 @@ export const ProductOrder: React.FC = () => {
     init();
   }, [productId]);
 
+  const formatPhone = (value: string) => {
+    return value
+      .replace(/\D/g, "")
+      .replace(/^(\d{2})(\d)/g, "($1) $2")
+      .replace(/(\d)(\d{4})$/, "$1-$2")
+      .slice(0, 15);
+  };
+
   const handleOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!product || !salon) return;
+    if (!product || !salon || !subscriptionValid) return;
     
+    if (clientPhone.replace(/\D/g, '').length < 10) {
+        alert('Por favor, insira um número de WhatsApp válido.');
+        return;
+    }
+
     setLoading(true);
 
     try {
@@ -122,51 +138,62 @@ export const ProductOrder: React.FC = () => {
             <div className="animate-fade-in">
                  <h3 className="font-serif text-xl font-bold text-gold-900 mb-6">Tenho Interesse</h3>
                  
-                 <form onSubmit={handleOrder} className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gold-700 uppercase tracking-wider ml-1">Nome Completo</label>
-                        <input 
-                            required
-                            type="text"
-                            value={clientName}
-                            onChange={e => setClientName(e.target.value)}
-                            className="w-full bg-white border border-gold-200 rounded-xl px-4 py-3 text-gold-900 outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500 transition-all"
-                            placeholder="Seu nome"
-                        />
-                    </div>
-                    
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-gold-700 uppercase tracking-wider ml-1">WhatsApp</label>
-                        <input 
-                            required
-                            type="tel"
-                            value={clientPhone}
-                            onChange={e => setClientPhone(e.target.value)}
-                            className="w-full bg-white border border-gold-200 rounded-xl px-4 py-3 text-gold-900 outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500 transition-all"
-                            placeholder="(00) 00000-0000"
-                        />
-                    </div>
+                 {!subscriptionValid ? (
+                     <div className="bg-red-50 border border-red-200 p-6 rounded-2xl text-center">
+                         <span className="material-symbols-outlined text-4xl text-red-400 mb-2">error</span>
+                         <h4 className="font-bold text-red-700 mb-1">Estabelecimento Indisponível</h4>
+                         <p className="text-sm text-red-600">
+                             No momento não é possível realizar pedidos online para este estabelecimento.
+                         </p>
+                     </div>
+                 ) : (
+                    <form onSubmit={handleOrder} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gold-700 uppercase tracking-wider ml-1">Nome Completo</label>
+                            <input 
+                                required
+                                type="text"
+                                value={clientName}
+                                onChange={e => setClientName(e.target.value)}
+                                className="w-full bg-white border border-gold-200 rounded-xl px-4 py-3 text-gold-900 outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500 transition-all"
+                                placeholder="Seu nome"
+                            />
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gold-700 uppercase tracking-wider ml-1">WhatsApp</label>
+                            <input 
+                                required
+                                type="tel"
+                                value={clientPhone}
+                                onChange={e => setClientPhone(formatPhone(e.target.value))}
+                                className="w-full bg-white border border-gold-200 rounded-xl px-4 py-3 text-gold-900 outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500 transition-all"
+                                placeholder="(00) 00000-0000"
+                                maxLength={15}
+                            />
+                        </div>
 
-                    <div className="bg-gold-100/50 p-4 rounded-xl border border-gold-200/50 flex gap-3 items-start">
-                        <span className="material-symbols-outlined text-gold-600">info</span>
-                        <p className="text-xs text-gold-800 leading-relaxed">
-                            Ao confirmar, você será redirecionado para o WhatsApp (em uma nova aba) para combinar a entrega ou retirada com nossa equipe.
-                        </p>
-                    </div>
+                        <div className="bg-gold-100/50 p-4 rounded-xl border border-gold-200/50 flex gap-3 items-start">
+                            <span className="material-symbols-outlined text-gold-600">info</span>
+                            <p className="text-xs text-gold-800 leading-relaxed">
+                                Ao confirmar, você será redirecionado para o WhatsApp (em uma nova aba) para combinar a entrega ou retirada com nossa equipe.
+                            </p>
+                        </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-[#25D366] text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg hover:bg-[#128C7E] transition-colors flex items-center justify-center gap-2"
-                    >
-                        {loading ? 'Processando...' : (
-                            <>
-                                <span className="material-symbols-outlined">chat</span>
-                                Confirmar no WhatsApp
-                            </>
-                        )}
-                    </button>
-                 </form>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-[#25D366] text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg hover:bg-[#128C7E] transition-colors flex items-center justify-center gap-2"
+                        >
+                            {loading ? 'Processando...' : (
+                                <>
+                                    <span className="material-symbols-outlined">chat</span>
+                                    Confirmar no WhatsApp
+                                </>
+                            )}
+                        </button>
+                    </form>
+                 )}
             </div>
         ) : (
             <div className="text-center p-6 bg-gray-100 rounded-2xl border border-gray-200 text-gray-500">
