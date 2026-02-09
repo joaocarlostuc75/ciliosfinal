@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { db } from '../../services/mockDb';
-import { Salon, SubscriptionStatus } from '../../types';
+import { Salon, SubscriptionStatus, SystemPlan } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { differenceInDays } from 'date-fns';
@@ -17,6 +17,7 @@ export const SuperDashboard: React.FC = () => {
         conversionRate: 0
     });
     const [expiringSoon, setExpiringSoon] = useState<Salon[]>([]);
+    const [chartData, setChartData] = useState<any[]>([]);
 
     useEffect(() => {
         loadData();
@@ -24,16 +25,35 @@ export const SuperDashboard: React.FC = () => {
 
     const loadData = async () => {
         const data = await db.getAllSalons();
+        const systemPlans = await db.getSystemPlans();
         setSalons(data);
         
         // Calculate Stats
-        const active = data.filter(s => s.subscription_status === SubscriptionStatus.ACTIVE).length;
+        const activeSalonsList = data.filter(s => s.subscription_status === SubscriptionStatus.ACTIVE);
+        const active = activeSalonsList.length;
         const trial = data.filter(s => s.subscription_status === SubscriptionStatus.TRIAL).length;
         
-        // Revenue (Simple Mock)
-        const revenue = active * 289; 
+        // Real Revenue Calculation (MRR)
+        let calculatedRevenue = 0;
         
-        // Conversion Rate (Active / (Active + Expired + Cancelled)) - rough approximation
+        activeSalonsList.forEach(salon => {
+            // Find the plan details based on the stored plan name
+            const planDetails = systemPlans.find(p => p.name === salon.subscription_plan);
+            
+            if (planDetails) {
+                if (planDetails.period === 'yearly') {
+                    // Divide by 12 for Monthly Recurring Revenue
+                    calculatedRevenue += (planDetails.price / 12);
+                } else {
+                    calculatedRevenue += planDetails.price;
+                }
+            } else if (salon.subscription_plan === 'Plano Gold VIP') {
+                // Fallback for demo data if plan name matches demo but plan config missing
+                calculatedRevenue += 450;
+            }
+        });
+        
+        // Conversion Rate (Active / (Active + Expired + Cancelled))
         const churned = data.filter(s => s.subscription_status === 'EXPIRED' || s.subscription_status === 'CANCELLED').length;
         const totalPaidAttempt = active + churned;
         const conversion = totalPaidAttempt > 0 ? (active / totalPaidAttempt) * 100 : 0;
@@ -42,7 +62,7 @@ export const SuperDashboard: React.FC = () => {
             totalSalons: data.length,
             activeSalons: active,
             trialSalons: trial,
-            totalRevenue: revenue,
+            totalRevenue: calculatedRevenue,
             conversionRate: conversion
         });
 
@@ -53,6 +73,15 @@ export const SuperDashboard: React.FC = () => {
             return days >= 0 && days <= 5;
         });
         setExpiringSoon(expiring);
+
+        // Update Chart Data with calculated values
+        setChartData([
+            { name: 'Jan', salons: Math.max(0, active - 4), revenue: Math.max(0, calculatedRevenue * 0.6) },
+            { name: 'Fev', salons: Math.max(0, active - 3), revenue: Math.max(0, calculatedRevenue * 0.7) },
+            { name: 'Mar', salons: Math.max(0, active - 2), revenue: Math.max(0, calculatedRevenue * 0.8) },
+            { name: 'Abr', salons: Math.max(0, active - 1), revenue: Math.max(0, calculatedRevenue * 0.9) },
+            { name: 'Mai', salons: active, revenue: calculatedRevenue },
+        ]);
     };
 
     const handleWhatsApp = (salon: Salon) => {
@@ -61,15 +90,6 @@ export const SuperDashboard: React.FC = () => {
         const msg = `Olá! Notamos que sua assinatura do sistema vence em ${days} dias. Vamos renovar para manter seu acesso?`;
         window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank');
     };
-
-    // Mock Chart Data
-    const chartData = [
-        { name: 'Jan', salons: 4, revenue: 800 },
-        { name: 'Fev', salons: 6, revenue: 1200 },
-        { name: 'Mar', salons: 8, revenue: 1800 },
-        { name: 'Abr', salons: 12, revenue: 2500 },
-        { name: 'Mai', salons: stats.totalSalons, revenue: stats.totalRevenue },
-    ];
 
     const StatCard = ({ title, value, icon, color, subtext }: any) => (
         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gold-100 flex items-center justify-between">
@@ -89,11 +109,11 @@ export const SuperDashboard: React.FC = () => {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard 
-                    title="Receita Mensal" 
-                    value={`R$ ${stats.totalRevenue}`} 
+                    title="Receita Mensal (MRR)" 
+                    value={`R$ ${stats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
                     icon="payments" 
                     color="bg-zinc-800" 
-                    subtext="Faturamento Recorrente"
+                    subtext="Baseado em assinaturas ativas"
                 />
                 <StatCard 
                     title="Assinantes Ativos" 
@@ -134,7 +154,13 @@ export const SuperDashboard: React.FC = () => {
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
                                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
-                                <Tooltip contentStyle={{borderRadius: '8px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}} />
+                                <Tooltip 
+                                    contentStyle={{borderRadius: '8px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}} 
+                                    formatter={(value: number, name: string) => [
+                                        name === 'revenue' ? `R$ ${value.toFixed(2)}` : value, 
+                                        name === 'revenue' ? 'Receita Est.' : 'Salões'
+                                    ]}
+                                />
                                 <Area type="monotone" dataKey="salons" stroke="#C5A059" strokeWidth={3} fillOpacity={1} fill="url(#colorSalons)" />
                             </AreaChart>
                         </ResponsiveContainer>

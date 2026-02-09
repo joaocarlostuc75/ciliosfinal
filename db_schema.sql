@@ -26,6 +26,8 @@ DROP TABLE IF EXISTS global_settings CASCADE;
 CREATE TABLE global_settings (
   id text PRIMARY KEY DEFAULT 'global',
   default_logo_url text,
+  app_name text DEFAULT 'J.C Sistemas',
+  broadcast_message text,
   updated_at timestamptz DEFAULT now()
 );
 
@@ -37,6 +39,7 @@ CREATE TABLE system_plans (
   period text CHECK (period IN ('monthly', 'yearly')) DEFAULT 'monthly',
   features text[] DEFAULT '{}', -- Array de funcionalidades
   is_popular boolean DEFAULT false,
+  is_public boolean DEFAULT true,
   created_at timestamptz DEFAULT now()
 );
 
@@ -59,7 +62,9 @@ CREATE TABLE salons (
   is_lifetime_free boolean DEFAULT false,
   
   owner_email text, -- Mantido para busca rápida no painel admin
-  created_at timestamptz DEFAULT now()
+  password text, -- Apenas para compatibilidade com o sistema mockado
+  created_at timestamptz DEFAULT now(),
+  last_login timestamptz
 );
 
 -- 2.4 Serviços (Nível Salão)
@@ -163,12 +168,11 @@ ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blocked_times ENABLE ROW LEVEL SECURITY;
 
--- --- Helper para Super Admin ---
--- IMPORTANTE: Substitua pelo email real do seu usuário Super Admin
+-- --- Helper para Super Admin (E-MAIL REAL DEFINIDO PELO USUÁRIO) ---
 CREATE OR REPLACE FUNCTION is_super_admin()
 RETURNS boolean AS $$
 BEGIN
-  RETURN (SELECT email FROM auth.users WHERE id = auth.uid()) = 'joaocarlostuc75@gmail.com';
+  RETURN (SELECT email FROM auth.users WHERE id = auth.uid()) = 'joaocarlostuc@gmail.com';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { db } from '../../services/mockDb';
 import { Salon, SubscriptionStatus, SystemPlan } from '../../types';

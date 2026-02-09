@@ -1,6 +1,6 @@
 {
-  "name": "Cílios de Luxo - Manager",
-  "description": "A comprehensive beauty salon management system featuring a public booking interface and a private admin dashboard. Includes scheduling, client management, and financial analytics.",
+  "name": "JC SISTEMAS - CRM PARA PEQUENOS NEGÓCIOS",
+  "description": "CRM COMPLETO PARA GERENCIAMENTO DE AGENDA, PRODUTOS E SERVIÇOS PARA PROFISSIONAIS DA BELEZA.",
   "requestFramePermissions": [
     "camera"
   ]

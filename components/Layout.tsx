@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../services/mockDb';
+import { Salon } from '../types';
+import { ImageWithFallback } from './ImageWithFallback';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -44,6 +46,15 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [salon, setSalon] = useState<Salon | null>(null);
+
+  useEffect(() => {
+      const loadSalon = async () => {
+          const s = await db.getSalon();
+          setSalon(s);
+      };
+      loadSalon();
+  }, []);
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -74,10 +85,22 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
         `}
       >
         <div className="p-8 flex flex-col items-center border-b border-gold-100 relative">
-           <div className="w-16 h-16 rounded-full border-2 border-gold-500 flex items-center justify-center bg-luxury-light mb-3">
-             <span className="material-symbols-outlined text-gold-600 text-3xl">diamond</span>
+           <div className="w-20 h-20 rounded-full border-2 border-gold-500 flex items-center justify-center bg-luxury-light mb-3 overflow-hidden shadow-sm">
+             {salon?.logo_url ? (
+                 <ImageWithFallback 
+                    src={salon.logo_url} 
+                    alt="Logo" 
+                    className="w-full h-full object-cover"
+                    fallbackIcon="diamond"
+                 />
+             ) : (
+                 <span className="material-symbols-outlined text-gold-600 text-3xl">diamond</span>
+             )}
            </div>
-           <h1 className="font-serif font-bold text-xl text-gold-700">Admin Panel</h1>
+           <h1 className="font-serif font-bold text-lg text-gold-700 text-center leading-tight">
+               {salon?.name || 'Admin Panel'}
+           </h1>
+           <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Gerenciamento</p>
            
            <button 
              onClick={closeSidebar}
@@ -87,7 +110,7 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
            </button>
         </div>
         
-        <nav className="flex-1 py-6 flex flex-col gap-1 overflow-y-auto">
+        <nav className="flex-1 py-6 flex flex-col gap-1 overflow-y-auto no-scrollbar">
           <SidebarItem icon="dashboard" label="Dashboard" to="/admin" active={location.pathname === '/admin'} onClick={closeSidebar} />
           <SidebarItem icon="calendar_month" label="Agenda" to="/admin/schedule" active={location.pathname.startsWith('/admin/schedule')} onClick={closeSidebar} />
           <SidebarItem icon="shopping_cart" label="Pedidos" to="/admin/orders" active={location.pathname.startsWith('/admin/orders')} onClick={closeSidebar} />

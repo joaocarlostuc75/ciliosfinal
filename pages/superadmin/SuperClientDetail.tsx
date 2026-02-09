@@ -2,24 +2,31 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
-import { Salon, SubscriptionStatus } from '../../types';
+import { Salon, SubscriptionStatus, SystemPlan } from '../../types';
 import { format, addDays } from 'date-fns';
 
 export const SuperClientDetail: React.FC = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [salon, setSalon] = useState<Salon | null>(null);
+    const [plans, setPlans] = useState<SystemPlan[]>([]);
+    
+    // Form States
     const [courtesyDays, setCourtesyDays] = useState('7');
+    const [selectedPlanId, setSelectedPlanId] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        loadSalon();
+        loadData();
     }, [id]);
 
-    const loadSalon = async () => {
+    const loadData = async () => {
         const salons = await db.getAllSalons();
+        const systemPlans = await db.getSystemPlans();
+        
         const found = salons.find(s => s.id === id);
         if (found) setSalon(found);
+        setPlans(systemPlans);
     };
 
     const handleToggleBlock = async () => {
@@ -29,7 +36,7 @@ export const SuperClientDetail: React.FC = () => {
             : SubscriptionStatus.BLOCKED;
         
         await db.adminUpdateSalon({ ...salon, subscription_status: newStatus });
-        loadSalon();
+        loadData();
     };
 
     const handleGrantCourtesy = async () => {
@@ -39,21 +46,32 @@ export const SuperClientDetail: React.FC = () => {
         if (isNaN(days)) return;
 
         const newEnd = addDays(new Date(), days);
+        
+        // Check if a plan change is requested
+        let newPlanName = salon.subscription_plan;
+        if (selectedPlanId) {
+            const plan = plans.find(p => p.id === selectedPlanId);
+            if (plan) newPlanName = plan.name;
+        }
+
         await db.adminUpdateSalon({
             ...salon,
             subscription_status: SubscriptionStatus.ACTIVE,
+            subscription_plan: newPlanName,
             subscription_end_date: newEnd.toISOString(),
             is_lifetime_free: false
         });
+        
         setIsLoading(false);
-        alert(`Acesso liberado por ${days} dias.`);
-        loadSalon();
+        setSelectedPlanId(''); // Reset selection
+        alert(`Cortesia aplicada: ${days} dias${selectedPlanId ? ` com alteração para o plano ${newPlanName}` : ''}.`);
+        loadData();
     };
 
     const handleCancelSub = async () => {
         if (salon && confirm('Cancelar assinatura imediatamente? O usuário perderá acesso.')) {
             await db.adminUpdateSalon({ ...salon, subscription_status: SubscriptionStatus.CANCELLED });
-            loadSalon();
+            loadData();
         }
     };
 
@@ -88,13 +106,13 @@ export const SuperClientDetail: React.FC = () => {
                     
                     <div className="grid grid-cols-2 gap-4 w-full border-t border-gray-100 pt-6">
                         <div className="text-center">
-                            <span className="block text-2xl font-bold text-gray-800">
-                                {salon.subscription_plan === 'FREE' ? 'Free' : 'Pro'}
+                            <span className="block text-lg font-bold text-gray-800 leading-tight">
+                                {salon.subscription_plan}
                             </span>
-                            <span className="text-xs text-gray-400 uppercase tracking-wider">Plano</span>
+                            <span className="text-xs text-gray-400 uppercase tracking-wider">Plano Atual</span>
                         </div>
                         <div className="text-center">
-                            <span className={`block text-2xl font-bold ${
+                            <span className={`block text-lg font-bold ${
                                 salon.subscription_status === 'ACTIVE' ? 'text-green-500' : 
                                 salon.subscription_status === 'BLOCKED' ? 'text-red-500' : 'text-blue-500'
                             }`}>
@@ -117,9 +135,11 @@ export const SuperClientDetail: React.FC = () => {
                         
                         <div className="grid md:grid-cols-2 gap-6">
                              {/* Block/Unblock */}
-                             <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                 <h5 className="font-bold text-gray-700 text-sm mb-2">Bloqueio de Segurança</h5>
-                                 <p className="text-xs text-gray-500 mb-4">Impede o acesso imediato ao painel administrativo deste salão.</p>
+                             <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex flex-col justify-between">
+                                 <div>
+                                     <h5 className="font-bold text-gray-700 text-sm mb-2">Bloqueio de Segurança</h5>
+                                     <p className="text-xs text-gray-500 mb-4">Impede o acesso imediato ao painel administrativo deste salão.</p>
+                                 </div>
                                  <button 
                                     onClick={handleToggleBlock}
                                     className={`w-full py-2 rounded-lg font-bold text-sm border transition-colors ${
@@ -135,24 +155,42 @@ export const SuperClientDetail: React.FC = () => {
                              {/* Subscription Override */}
                              <div className="p-4 bg-gold-50/50 rounded-xl border border-gold-100">
                                  <h5 className="font-bold text-gold-800 text-sm mb-2">Concessão de Cortesia</h5>
-                                 <p className="text-xs text-gold-600 mb-4">Libera acesso total por um período determinado.</p>
-                                 <div className="flex gap-2">
-                                     <select 
-                                        className="bg-white border border-gold-200 rounded-lg text-xs p-2 outline-none flex-1"
-                                        value={courtesyDays}
-                                        onChange={e => setCourtesyDays(e.target.value)}
+                                 <p className="text-xs text-gold-600 mb-4">Libera acesso e opcionalmente altera o plano.</p>
+                                 
+                                 <div className="flex flex-col gap-2">
+                                     {/* Plan Selector */}
+                                     <select
+                                        className="bg-white border border-gold-200 rounded-lg text-xs p-2 outline-none w-full text-gray-700"
+                                        value={selectedPlanId}
+                                        onChange={e => setSelectedPlanId(e.target.value)}
                                      >
-                                         <option value="7">7 Dias</option>
-                                         <option value="15">15 Dias</option>
-                                         <option value="30">30 Dias</option>
+                                         <option value="">Manter Plano Atual ({salon.subscription_plan})</option>
+                                         {plans.map(p => (
+                                             <option key={p.id} value={p.id}>
+                                                 {p.name} {!p.is_public ? '🔒 (Secreto)' : ''}
+                                             </option>
+                                         ))}
                                      </select>
-                                     <button 
-                                        onClick={handleGrantCourtesy}
-                                        disabled={isLoading}
-                                        className="bg-gold-500 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-gold-600 disabled:opacity-50"
-                                     >
-                                         Aplicar
-                                     </button>
+
+                                     <div className="flex gap-2">
+                                         <select 
+                                            className="bg-white border border-gold-200 rounded-lg text-xs p-2 outline-none flex-1 text-gray-700"
+                                            value={courtesyDays}
+                                            onChange={e => setCourtesyDays(e.target.value)}
+                                         >
+                                             <option value="7">7 Dias</option>
+                                             <option value="15">15 Dias</option>
+                                             <option value="30">30 Dias</option>
+                                             <option value="365">1 Ano</option>
+                                         </select>
+                                         <button 
+                                            onClick={handleGrantCourtesy}
+                                            disabled={isLoading}
+                                            className="bg-gold-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-gold-600 disabled:opacity-50 shadow-sm"
+                                         >
+                                             Aplicar
+                                         </button>
+                                     </div>
                                  </div>
                              </div>
                         </div>

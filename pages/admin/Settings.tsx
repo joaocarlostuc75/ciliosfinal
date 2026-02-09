@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../services/mockDb';
 import { Salon, DaySchedule, TimeSlot, SubscriptionStatus } from '../../types';
 import { differenceInDays } from 'date-fns';
+import { ImageWithFallback } from '../../components/ImageWithFallback';
 
 const DAYS_OF_WEEK = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
@@ -12,7 +13,7 @@ export const Settings: React.FC = () => {
   const [schedule, setSchedule] = useState<DaySchedule[]>([]);
   const [previewLogo, setPreviewLogo] = useState<string>('');
   
-  const [isLoading, setIsLoading] = useState(true); // Explicit loading state
+  const [isLoading, setIsLoading] = useState(true);
 
   // Security Form
   const [email, setEmail] = useState('');
@@ -120,6 +121,12 @@ export const Settings: React.FC = () => {
       setSalon(updatedSalon);
       setPassword(''); 
       setMessage({ type: 'success', text: 'Configurações salvas com sucesso!' });
+      
+      // Update sidebar logic may require window reload or context update, simpler here to reload if logo changed
+      if (salon.logo_url !== updatedSalon.logo_url) {
+          setTimeout(() => window.location.reload(), 1000);
+      }
+
     } catch (error) {
       setMessage({ type: 'error', text: 'Erro ao salvar configurações.' });
     } finally {
@@ -161,8 +168,8 @@ export const Settings: React.FC = () => {
           {/* Header */}
           <div className="p-8 border-b border-gold-100 bg-gold-50/30 flex justify-between items-center">
              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gold-100 rounded-full flex items-center justify-center text-gold-600">
-                   <span className="material-symbols-outlined">settings_storefront</span>
+                <div className="w-12 h-12 bg-white rounded-xl shadow-sm border border-gold-200 flex items-center justify-center text-gold-600">
+                   <span className="material-symbols-outlined">tune</span>
                 </div>
                 <div>
                    <h2 className="font-serif text-2xl font-bold text-gold-900">Configurações</h2>
@@ -174,7 +181,7 @@ export const Settings: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
              {message && (
-                <div className={`p-4 rounded-xl flex items-center gap-3 ${
+                <div className={`p-4 rounded-xl flex items-center gap-3 animate-fade-in ${
                    message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
                 }`}>
                    <span className="material-symbols-outlined">{message.type === 'success' ? 'check_circle' : 'error'}</span>
@@ -182,27 +189,37 @@ export const Settings: React.FC = () => {
                 </div>
              )}
 
-             {/* Basic Info */}
+             {/* Basic Info Section */}
              <div className="flex flex-col md:flex-row gap-8 items-start">
                 <div className="w-full md:w-1/3 flex flex-col items-center">
-                   <div className="relative w-48 h-48 rounded-full border-4 border-gold-200 shadow-xl overflow-hidden bg-gray-50 mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                   <div 
+                      className="relative w-48 h-48 rounded-full border-4 border-gold-200 shadow-xl overflow-hidden bg-gray-50 mb-4 group cursor-pointer" 
+                      onClick={() => fileInputRef.current?.click()}
+                   >
                       {previewLogo ? (
-                          <img src={previewLogo} className="w-full h-full object-cover" />
+                          <ImageWithFallback src={previewLogo} className="w-full h-full object-cover" />
                       ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
                               <span className="material-symbols-outlined text-4xl">add_photo_alternate</span>
                               <span className="text-xs">Logotipo</span>
                           </div>
                       )}
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
                          <span className="material-symbols-outlined text-white text-3xl">photo_camera</span>
                       </div>
                    </div>
                    <input type="file" ref={fileInputRef} onChange={handleLogoUpload} accept="image/*" className="hidden" />
-                   <p className="text-xs text-center text-gray-400">Clique para alterar</p>
+                   <p className="text-xs text-center text-gray-400">Recomendado: 500x500px</p>
                 </div>
 
                 <div className="flex-1 w-full space-y-6">
+                   <h3 className="font-serif text-lg font-bold text-gold-900 flex items-center gap-2 border-b border-gray-100 pb-2">
+                       <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                           <span className="material-symbols-outlined text-sm">store</span>
+                       </div>
+                       Informações Básicas
+                   </h3>
+                   
                    <div className="grid md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                          <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">Nome do estabelecimento</label>
@@ -221,29 +238,36 @@ export const Settings: React.FC = () => {
              </div>
 
              {/* Account Security Section */}
-             <div className="pt-8 border-t border-gold-100">
-                <h3 className="font-serif text-xl font-bold text-gold-900 mb-6 flex items-center gap-2">
-                    <span className="material-symbols-outlined">security</span>
-                    Segurança da Conta
+             <div className="pt-8">
+                <h3 className="font-serif text-lg font-bold text-gold-900 mb-6 flex items-center gap-2 border-b border-gray-100 pb-2">
+                    <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+                       <span className="material-symbols-outlined text-sm">lock</span>
+                    </div>
+                    Segurança de Acesso
                 </h3>
                 <div className="grid md:grid-cols-2 gap-6 bg-gray-50 p-6 rounded-xl border border-gray-100">
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">E-mail de Acesso</label>
-                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-gold-500" />
+                        <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">E-mail de Login</label>
+                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-gold-500 bg-white" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">Nova Senha</label>
-                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Preencha apenas se quiser alterar" className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-gold-500" />
+                        <label className="text-xs font-bold text-gold-800 uppercase tracking-wider">Alterar Senha</label>
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Deixe em branco para manter a atual" className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:border-gold-500 bg-white" />
                     </div>
                 </div>
              </div>
 
              {/* Opening Hours */}
-             <div className="pt-8 border-t border-gold-100">
-                <h3 className="font-serif text-xl font-bold text-gold-900 mb-6">Horário de Funcionamento</h3>
-                <div className="space-y-4">
+             <div className="pt-8">
+                <h3 className="font-serif text-lg font-bold text-gold-900 mb-6 flex items-center gap-2 border-b border-gray-100 pb-2">
+                    <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
+                       <span className="material-symbols-outlined text-sm">schedule</span>
+                    </div>
+                    Horário de Funcionamento
+                </h3>
+                <div className="space-y-3">
                     {schedule.map((day, dayIndex) => (
-                        <div key={day.dayOfWeek} className={`flex flex-col md:flex-row gap-4 p-4 rounded-xl border transition-colors ${day.isOpen ? 'bg-white border-gold-200' : 'bg-gray-50 border-transparent opacity-75'}`}>
+                        <div key={day.dayOfWeek} className={`flex flex-col md:flex-row gap-4 p-4 rounded-xl border transition-colors ${day.isOpen ? 'bg-white border-gold-200 shadow-sm' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
                             <div className="w-32 flex items-center gap-3">
                                 <input type="checkbox" checked={day.isOpen} onChange={() => handleToggleDay(dayIndex)} className="w-5 h-5 accent-gold-500 cursor-pointer" />
                                 <span className={`font-bold ${day.isOpen ? 'text-gold-900' : 'text-gray-400'}`}>{DAYS_OF_WEEK[day.dayOfWeek]}</span>
@@ -252,14 +276,14 @@ export const Settings: React.FC = () => {
                                 {day.isOpen ? (
                                     <>
                                         {day.slots.map((slot, slotIndex) => (
-                                            <div key={slotIndex} className="flex items-center gap-2">
-                                                <input type="time" value={slot.start} onChange={(e) => handleSlotChange(dayIndex, slotIndex, 'start', e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm" />
-                                                <span className="text-gray-400">até</span>
-                                                <input type="time" value={slot.end} onChange={(e) => handleSlotChange(dayIndex, slotIndex, 'end', e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm" />
-                                                <button type="button" onClick={() => handleRemoveSlot(dayIndex, slotIndex)} className="text-red-300 hover:text-red-500"><span className="material-symbols-outlined text-lg">delete</span></button>
+                                            <div key={slotIndex} className="flex items-center gap-2 animate-fade-in">
+                                                <input type="time" value={slot.start} onChange={(e) => handleSlotChange(dayIndex, slotIndex, 'start', e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm bg-gray-50 focus:bg-white focus:border-gold-500 outline-none" />
+                                                <span className="text-gray-400 font-bold">-</span>
+                                                <input type="time" value={slot.end} onChange={(e) => handleSlotChange(dayIndex, slotIndex, 'end', e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm bg-gray-50 focus:bg-white focus:border-gold-500 outline-none" />
+                                                <button type="button" onClick={() => handleRemoveSlot(dayIndex, slotIndex)} className="text-red-300 hover:text-red-500 p-1"><span className="material-symbols-outlined text-lg">delete</span></button>
                                             </div>
                                         ))}
-                                        <button type="button" onClick={() => handleAddSlot(dayIndex)} className="text-xs font-bold text-gold-600 flex items-center gap-1 w-fit"><span className="material-symbols-outlined text-sm">add</span> Adicionar Intervalo</button>
+                                        <button type="button" onClick={() => handleAddSlot(dayIndex)} className="text-xs font-bold text-gold-600 flex items-center gap-1 w-fit mt-1 hover:underline"><span className="material-symbols-outlined text-sm">add_circle</span> Adicionar Pausa/Turno</button>
                                     </>
                                 ) : <span className="text-sm text-gray-400 italic py-1">Fechado</span>}
                             </div>
@@ -268,9 +292,9 @@ export const Settings: React.FC = () => {
                 </div>
              </div>
 
-             <div className="pt-6 border-t border-gold-100 flex justify-end">
+             <div className="pt-6 border-t border-gold-100 flex justify-end sticky bottom-0 bg-white p-4 -mx-4 -mb-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                 <button type="submit" disabled={isSaving} className="bg-gold-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:bg-gold-600 transition-all flex items-center gap-2">
-                   {isSaving ? 'Salvando...' : <><span className="material-symbols-outlined">save</span> Salvar Alterações</>}
+                   {isSaving ? <><span className="material-symbols-outlined animate-spin">refresh</span> Salvando...</> : <><span className="material-symbols-outlined">save</span> Salvar Alterações</>}
                 </button>
              </div>
           </form>

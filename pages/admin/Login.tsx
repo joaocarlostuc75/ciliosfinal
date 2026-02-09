@@ -208,13 +208,6 @@ export const Login: React.FC = () => {
                 >
                   Voltar para o site público
                 </button>
-                
-                {/* Developer Hints */}
-                <div className="bg-gray-50 p-2 rounded border border-gray-100 inline-block text-left">
-                     <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Credenciais de Teste:</p>
-                     <p className="text-[10px] text-gray-500">Super Admin: <span className="font-mono">joaocarlostuc75@gmail.com</span> / <span className="font-mono">admin123</span></p>
-                     <p className="text-[10px] text-gray-500">Admin: <span className="font-mono">admin@teste.com</span> / <span className="font-mono">123456</span></p>
-                </div>
              </div>
         </div>
       </div>

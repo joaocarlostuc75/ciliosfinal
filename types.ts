@@ -1,5 +1,4 @@
 
-
 export enum AppointmentStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -52,6 +51,7 @@ export interface Salon {
   
   created_at: string; // To calculate trial period
   owner_email?: string;
+  password?: string; // ADDED: Security check for mock DB
   last_login?: string; // ISO Date for Churn monitoring
 }
 

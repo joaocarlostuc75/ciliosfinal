@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../services/mockDb';
 import { Service, Salon } from '../../types';
+import { ImageWithFallback } from '../../components/ImageWithFallback';
 
 export const ServicesManager: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
@@ -122,7 +123,12 @@ export const ServicesManager: React.FC = () => {
                           <tr key={s.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                               <td className="px-6 py-4">
                                   <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                                      <img src={s.image_url} alt={s.name} className="w-full h-full object-cover" />
+                                      <ImageWithFallback 
+                                        src={s.image_url} 
+                                        alt={s.name} 
+                                        className="w-full h-full object-cover" 
+                                        fallbackIcon="spa"
+                                      />
                                   </div>
                               </td>
                               <td className="px-6 py-4 font-medium text-gray-800 whitespace-nowrap">{s.name}</td>
@@ -157,7 +163,7 @@ export const ServicesManager: React.FC = () => {
                               onClick={() => fileInputRef.current?.click()}
                           >
                               {formData.image_url ? (
-                                  <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                                  <ImageWithFallback src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
                               ) : (
                                   <span className="material-symbols-outlined text-gray-400 text-3xl">add_photo_alternate</span>
                               )}

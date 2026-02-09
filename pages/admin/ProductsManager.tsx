@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../services/mockDb';
 import { Product, Salon } from '../../types';
+import { ImageWithFallback } from '../../components/ImageWithFallback';
 
 export const ProductsManager: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -125,7 +126,12 @@ export const ProductsManager: React.FC = () => {
                                   <td className="px-6 py-4">
                                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center shrink-0">
                                           {p.image_url ? (
-                                            <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                                            <ImageWithFallback 
+                                                src={p.image_url} 
+                                                alt={p.name} 
+                                                className="w-full h-full object-cover" 
+                                                fallbackIcon="inventory_2"
+                                            />
                                           ) : (
                                             <span className="material-symbols-outlined text-gray-300">image</span>
                                           )}
@@ -171,7 +177,7 @@ export const ProductsManager: React.FC = () => {
                               onClick={() => fileInputRef.current?.click()}
                           >
                               {formData.image_url ? (
-                                  <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                                  <ImageWithFallback src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
                               ) : (
                                   <span className="material-symbols-outlined text-gray-400 text-3xl">add_photo_alternate</span>
                               )}

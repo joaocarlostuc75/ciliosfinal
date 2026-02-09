@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
 import { Service, Product, Salon } from '../../types';
+import { ImageWithFallback } from '../../components/ImageWithFallback';
 
 export const ServicesList: React.FC = () => {
   const navigate = useNavigate();
@@ -77,32 +78,39 @@ export const ServicesList: React.FC = () => {
             {activeTab === 'services' && services.map((service, index) => (
                 <div 
                     key={service.id} 
-                    className="group bg-white rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl border border-gray-100 hover:border-gold-200 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full animate-fade-in"
+                    className="group bg-white rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl border border-gray-100 hover:border-gold-300 transition-all duration-300 hover:-translate-y-2 flex flex-col h-full animate-fade-in cursor-pointer"
                     style={{ animationDelay: `${index * 50}ms` }}
+                    onClick={() => navigate(`/book/${service.id}`)}
                 >
-                    {/* Image Area with Zoom */}
-                    <div className="relative aspect-square overflow-hidden bg-gray-100">
-                        <img 
+                    {/* Image Area with Zoom Effect */}
+                    <div className="relative aspect-square overflow-hidden bg-gray-100 rounded-t-3xl">
+                        <ImageWithFallback 
                             src={service.image_url} 
                             alt={service.name} 
                             className="w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-110" 
+                            fallbackIcon="spa"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 transition-opacity duration-300 group-hover:opacity-40" />
+                        {/* Overlay Gradient */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 transition-opacity duration-300 group-hover:opacity-40 pointer-events-none" />
                         
                         {/* Floating Price Tag */}
-                        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-gold-100 z-10">
+                        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-gold-100 z-10 group-hover:scale-105 transition-transform">
                             <span className="text-gold-700 font-bold font-sans text-sm">R$ {service.price.toFixed(2)}</span>
                         </div>
 
                         {/* Duration Badge */}
-                        <div className="absolute bottom-4 left-4 flex items-center gap-1 text-white/90 text-xs font-medium bg-black/30 backdrop-blur-sm px-2 py-1 rounded-lg">
+                        <div className="absolute bottom-4 left-4 flex items-center gap-1 text-white/90 text-xs font-medium bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
                             <span className="material-symbols-outlined text-sm">schedule</span>
                             {Math.floor(service.duration_min / 60)}h {service.duration_min % 60 > 0 ? `${service.duration_min % 60}m` : ''}
                         </div>
                     </div>
                     
                     {/* Details */}
-                    <div className="p-6 flex flex-col flex-1">
+                    <div className="p-6 flex flex-col flex-1 relative">
+                        <div className="absolute -top-6 right-6 w-12 h-12 bg-gold-500 rounded-full flex items-center justify-center text-white shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                            <span className="material-symbols-outlined">arrow_forward</span>
+                        </div>
+
                         <h3 className="font-serif text-xl font-bold text-gold-900 leading-tight mb-2 group-hover:text-gold-600 transition-colors line-clamp-1">{service.name}</h3>
                         
                         <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed flex-1 mb-6">
@@ -110,11 +118,10 @@ export const ServicesList: React.FC = () => {
                         </p>
                         
                         <button 
-                            onClick={() => navigate(`/book/${service.id}`)}
-                            className="w-full bg-gold-500 text-white py-3.5 rounded-xl font-bold text-sm tracking-wide shadow-md hover:bg-gold-600 hover:shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold text-xs tracking-widest uppercase shadow-md group-hover:bg-gold-500 group-hover:shadow-lg transition-all flex items-center justify-center gap-2"
                         >
                             <span className="material-symbols-outlined text-lg">calendar_add_on</span>
-                            AGENDAR
+                            Agendar
                         </button>
                     </div>
                 </div>
@@ -124,22 +131,17 @@ export const ServicesList: React.FC = () => {
             {activeTab === 'products' && products.map((product, index) => (
                 <div 
                     key={product.id} 
-                    className="group bg-white rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl border border-gray-100 hover:border-gold-200 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full animate-fade-in"
+                    className="group bg-white rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl border border-gray-100 hover:border-gold-300 transition-all duration-300 hover:-translate-y-2 flex flex-col h-full animate-fade-in"
                     style={{ animationDelay: `${index * 50}ms` }}
                 >
                     {/* Image Area with Zoom */}
-                    <div className="relative aspect-square overflow-hidden bg-gray-100">
-                        {product.image_url ? (
-                             <img 
-                                src={product.image_url} 
-                                alt={product.name} 
-                                className="w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-110" 
-                             />
-                        ) : (
-                             <div className="w-full h-full flex items-center justify-center text-gold-200 bg-gold-50 group-hover:text-gold-300 transition-colors">
-                                <span className="material-symbols-outlined text-6xl">inventory_2</span>
-                             </div>
-                        )}
+                    <div className="relative aspect-square overflow-hidden bg-gray-100 rounded-t-3xl">
+                        <ImageWithFallback 
+                            src={product.image_url} 
+                            alt={product.name} 
+                            className="w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-110" 
+                            fallbackIcon="inventory_2"
+                        />
                         
                         {/* Floating Price Tag */}
                         <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-gold-100 z-10">
@@ -169,10 +171,10 @@ export const ServicesList: React.FC = () => {
                         <button 
                             onClick={() => navigate(`/order/${product.id}`)}
                             disabled={product.stock <= 0}
-                            className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold text-sm tracking-wide shadow-md hover:bg-black hover:shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                            className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold text-xs tracking-widest uppercase shadow-md hover:bg-gold-500 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none disabled:hover:bg-gray-900"
                         >
                             <span className="material-symbols-outlined text-lg">shopping_bag</span>
-                            {product.stock > 0 ? 'TENHO INTERESSE' : 'INDISPONÍVEL'}
+                            {product.stock > 0 ? 'Tenho Interesse' : 'Indisponível'}
                         </button>
                     </div>
                 </div>
@@ -181,10 +183,16 @@ export const ServicesList: React.FC = () => {
 
         {/* Empty States */}
         {activeTab === 'services' && services.length === 0 && (
-            <div className="text-center py-20 text-gray-400">Nenhum serviço disponível no momento.</div>
+            <div className="text-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-3xl">
+                <span className="material-symbols-outlined text-5xl mb-2 opacity-50">spa</span>
+                <p>Nenhum serviço disponível no momento.</p>
+            </div>
         )}
         {activeTab === 'products' && products.length === 0 && (
-            <div className="text-center py-20 text-gray-400">Nenhum produto cadastrado no momento.</div>
+            <div className="text-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-3xl">
+                <span className="material-symbols-outlined text-5xl mb-2 opacity-50">inventory_2</span>
+                <p>Nenhum produto cadastrado no momento.</p>
+            </div>
         )}
 
       </main>
