@@ -1,32 +1,36 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../services/mockDb';
-import { Product } from '../../types';
+import { Product, Salon } from '../../types';
 
 export const ProductsManager: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [currentSalon, setCurrentSalon] = useState<Salon | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({ name: '', price: '', stock: '', description: '', image_url: '' });
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadProducts = async () => {
+  const loadData = async () => {
     setProducts(await db.getProducts());
+    setCurrentSalon(await db.getSalon());
   };
 
   useEffect(() => {
-    loadProducts();
+    loadData();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isUploading) return;
+    if (!currentSalon) return;
 
     const newProduct: Product = {
         id: editingProduct ? editingProduct.id : crypto.randomUUID(),
-        salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
+        salon_id: currentSalon.id, // Dynamic
         name: formData.name,
         price: Number(formData.price),
         stock: Number(formData.stock),
@@ -39,7 +43,7 @@ export const ProductsManager: React.FC = () => {
     } else {
         await db.addProduct(newProduct);
     }
-    await loadProducts();
+    await loadData();
     closeModal();
   };
 
@@ -81,7 +85,7 @@ export const ProductsManager: React.FC = () => {
   const handleDelete = async (id: string) => {
       if(confirm('Tem certeza que deseja excluir este produto?')) {
           await db.deleteProduct(id);
-          await loadProducts();
+          await loadData();
       }
   };
 

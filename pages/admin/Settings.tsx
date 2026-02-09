@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../services/mockDb';
 import { Salon, DaySchedule, TimeSlot, SubscriptionStatus } from '../../types';
-import { format, differenceInDays } from 'date-fns';
+import { differenceInDays } from 'date-fns';
 
 const DAYS_OF_WEEK = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
@@ -12,6 +12,8 @@ export const Settings: React.FC = () => {
   const [schedule, setSchedule] = useState<DaySchedule[]>([]);
   const [previewLogo, setPreviewLogo] = useState<string>('');
   
+  const [isLoading, setIsLoading] = useState(true); // Explicit loading state
+
   // Security Form
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,12 +24,22 @@ export const Settings: React.FC = () => {
 
   useEffect(() => {
     const fetchSalon = async () => {
-        const currentSalon = await db.getSalon();
-        setSalon(currentSalon);
-        setFormData(currentSalon);
-        setSchedule(currentSalon?.opening_hours || []);
-        setPreviewLogo(currentSalon?.logo_url || '');
-        setEmail(currentSalon?.owner_email || '');
+        setIsLoading(true);
+        try {
+            const currentSalon = await db.getSalon();
+            if (currentSalon) {
+                setSalon(currentSalon);
+                setFormData(currentSalon);
+                setSchedule(currentSalon.opening_hours || []);
+                setPreviewLogo(currentSalon.logo_url || '');
+                setEmail(currentSalon.owner_email || '');
+            }
+        } catch (error) {
+            console.error("Error loading settings:", error);
+            setMessage({ type: 'error', text: 'Falha ao carregar dados.' });
+        } finally {
+            setIsLoading(false);
+        }
     };
     fetchSalon();
   }, []);
@@ -116,7 +128,20 @@ export const Settings: React.FC = () => {
     }
   };
 
-  if (!salon) return <div>Carregando...</div>;
+  if (isLoading) return (
+      <div className="flex flex-col items-center justify-center h-96 text-gold-600">
+          <span className="material-symbols-outlined text-4xl animate-spin mb-4">progress_activity</span>
+          <p>Carregando configurações...</p>
+      </div>
+  );
+
+  if (!salon) return (
+      <div className="flex flex-col items-center justify-center h-96 text-gray-500">
+          <span className="material-symbols-outlined text-4xl mb-4">error</span>
+          <p>Não foi possível carregar os dados do estabelecimento.</p>
+          <button onClick={() => window.location.reload()} className="mt-4 text-gold-600 font-bold hover:underline">Tentar novamente</button>
+      </div>
+  );
 
   const getStatusBadge = () => {
       if (salon.is_lifetime_free) return <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200">Acesso Vitalício</span>;

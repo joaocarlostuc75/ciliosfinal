@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
-import { Client, Appointment, Service, Order, Product } from '../../types';
+import { Client, Appointment, Service, Order, Product, Salon } from '../../types';
 import { format } from 'date-fns';
 
 type HistoryItem = 
@@ -10,6 +11,7 @@ type HistoryItem =
 export const ClientsManager: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentSalon, setCurrentSalon] = useState<Salon | null>(null);
   
   // Modals
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -32,6 +34,7 @@ export const ClientsManager: React.FC = () => {
     setClients(await db.getClients());
     setServices(await db.getServices());
     setProducts(await db.getProducts());
+    setCurrentSalon(await db.getSalon());
   };
 
   const filteredClients = clients.filter(c => 
@@ -60,6 +63,7 @@ export const ClientsManager: React.FC = () => {
 
   const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentSalon) return;
     
     if (formData.whatsapp.replace(/\D/g, '').length < 10) {
         alert('Por favor, insira um número de WhatsApp válido.');
@@ -68,7 +72,7 @@ export const ClientsManager: React.FC = () => {
 
     const newClient: Client = {
       id: editingClient ? editingClient.id : crypto.randomUUID(),
-      salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
+      salon_id: currentSalon.id, // Dynamic
       name: formData.name,
       whatsapp: formData.whatsapp,
       created_at: editingClient ? editingClient.created_at : new Date().toISOString()

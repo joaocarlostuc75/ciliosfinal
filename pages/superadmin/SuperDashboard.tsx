@@ -1,324 +1,192 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { db } from '../../services/mockDb';
-import { Salon, SubscriptionStatus, GlobalSettings } from '../../types';
-import { differenceInDays, format, addDays } from 'date-fns';
+import { Salon, SubscriptionStatus } from '../../types';
 import { useNavigate } from 'react-router-dom';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { differenceInDays } from 'date-fns';
 
 export const SuperDashboard: React.FC = () => {
     const navigate = useNavigate();
     const [salons, setSalons] = useState<Salon[]>([]);
-    const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(null);
-    const [stats, setStats] = useState({ total: 0, active: 0, blocked: 0, trial: 0 });
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [isUploading, setIsUploading] = useState(false);
-    
-    // Modal for specific date extension
-    const [selectedSalon, setSelectedSalon] = useState<Salon | null>(null);
-    const [extensionDate, setExtensionDate] = useState('');
-    
+    const [stats, setStats] = useState({
+        totalSalons: 0,
+        activeSalons: 0,
+        trialSalons: 0,
+        totalRevenue: 0,
+        conversionRate: 0
+    });
+    const [expiringSoon, setExpiringSoon] = useState<Salon[]>([]);
+
     useEffect(() => {
         loadData();
     }, []);
 
     const loadData = async () => {
-        try {
-            const salonList = await db.getAllSalons();
-            setSalons(salonList || []);
-            setGlobalSettings(await db.getGlobalSettings());
-
-            // Calc Stats
-            setStats({
-                total: salonList.length,
-                active: salonList.filter(s => s.subscription_status === SubscriptionStatus.ACTIVE || s.is_lifetime_free).length,
-                blocked: salonList.filter(s => s.subscription_status === SubscriptionStatus.BLOCKED).length,
-                trial: salonList.filter(s => s.subscription_status === SubscriptionStatus.TRIAL).length
-            });
-        } catch (e) {
-            console.error("Failed to load data", e);
-        }
-    };
-
-    const handleToggleStatus = async (salon: Salon) => {
-        let newStatus = salon.subscription_status;
-        if (newStatus !== SubscriptionStatus.BLOCKED) {
-            newStatus = SubscriptionStatus.BLOCKED;
-        } else {
-            // Restore to previous state or Active
-            newStatus = SubscriptionStatus.ACTIVE;
-        }
+        const data = await db.getAllSalons();
+        setSalons(data);
         
-        await db.adminUpdateSalon({ ...salon, subscription_status: newStatus });
-        await loadData();
-    };
-
-    const handleGrantLifetime = async (salon: Salon) => {
-        const confirmMsg = salon.is_lifetime_free 
-            ? "Remover acesso vitalício gratuito?" 
-            : "Conceder acesso vitalício gratuito para este cliente?";
+        // Calculate Stats
+        const active = data.filter(s => s.subscription_status === SubscriptionStatus.ACTIVE).length;
+        const trial = data.filter(s => s.subscription_status === SubscriptionStatus.TRIAL).length;
         
-        if (confirm(confirmMsg)) {
-            await db.adminUpdateSalon({ 
-                ...salon, 
-                is_lifetime_free: !salon.is_lifetime_free,
-                subscription_status: !salon.is_lifetime_free ? SubscriptionStatus.ACTIVE : SubscriptionStatus.TRIAL 
-            });
-            await loadData();
-        }
-    };
-
-    const handleSetExpiration = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (selectedSalon && extensionDate) {
-            await db.adminUpdateSalon({
-                ...selectedSalon,
-                subscription_end_date: new Date(extensionDate).toISOString(),
-                subscription_status: SubscriptionStatus.ACTIVE,
-                is_lifetime_free: false // Custom date overrides lifetime
-            });
-            setSelectedSalon(null);
-            await loadData();
-        }
-    };
-
-    const handleGlobalLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file && globalSettings) {
-            setIsUploading(true);
-            try {
-                const url = await db.uploadImage(file);
-                await db.saveGlobalSettings({ ...globalSettings, default_logo_url: url });
-                await loadData();
-            } catch (error) {
-                alert('Erro no upload');
-            } finally {
-                setIsUploading(false);
-            }
-        }
-    };
-
-    const handleLogout = async () => {
-        await db.logout();
-        navigate('/');
-    };
-
-    const getDaysUsed = (salon: Salon) => {
-        return differenceInDays(new Date(), new Date(salon.created_at));
-    };
-
-    const getExpirationDisplay = (salon: Salon) => {
-        if (salon.is_lifetime_free) return <span className="text-emerald-400 font-bold">Vitalício</span>;
-        if (salon.subscription_status === SubscriptionStatus.BLOCKED) return <span className="text-red-500 font-bold">Bloqueado</span>;
+        // Revenue (Simple Mock)
+        const revenue = active * 289; 
         
-        if (salon.subscription_end_date) {
-            const end = new Date(salon.subscription_end_date);
-            const daysLeft = differenceInDays(end, new Date());
-            return daysLeft < 0 ? <span className="text-red-400">Expirado</span> : <span>{daysLeft} dias restantes</span>;
-        }
+        // Conversion Rate (Active / (Active + Expired + Cancelled)) - rough approximation
+        const churned = data.filter(s => s.subscription_status === 'EXPIRED' || s.subscription_status === 'CANCELLED').length;
+        const totalPaidAttempt = active + churned;
+        const conversion = totalPaidAttempt > 0 ? (active / totalPaidAttempt) * 100 : 0;
 
-        if (salon.subscription_status === SubscriptionStatus.TRIAL) {
-            const daysUsed = getDaysUsed(salon);
-            const remaining = 10 - daysUsed;
-            return remaining <= 0 ? <span className="text-red-400">Expirado (Trial)</span> : <span>{remaining} dias de teste</span>;
-        }
+        setStats({
+            totalSalons: data.length,
+            activeSalons: active,
+            trialSalons: trial,
+            totalRevenue: revenue,
+            conversionRate: conversion
+        });
 
-        return <span className="text-gray-500">Indefinido</span>;
+        // Expiring Soon Logic (0-5 days)
+        const expiring = data.filter(s => {
+            if (!s.subscription_end_date || s.is_lifetime_free) return false;
+            const days = differenceInDays(new Date(s.subscription_end_date), new Date());
+            return days >= 0 && days <= 5;
+        });
+        setExpiringSoon(expiring);
     };
+
+    const handleWhatsApp = (salon: Salon) => {
+        const phone = salon.phone.replace(/\D/g, '');
+        const days = differenceInDays(new Date(salon.subscription_end_date!), new Date());
+        const msg = `Olá! Notamos que sua assinatura do sistema vence em ${days} dias. Vamos renovar para manter seu acesso?`;
+        window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    };
+
+    // Mock Chart Data
+    const chartData = [
+        { name: 'Jan', salons: 4, revenue: 800 },
+        { name: 'Fev', salons: 6, revenue: 1200 },
+        { name: 'Mar', salons: 8, revenue: 1800 },
+        { name: 'Abr', salons: 12, revenue: 2500 },
+        { name: 'Mai', salons: stats.totalSalons, revenue: stats.totalRevenue },
+    ];
+
+    const StatCard = ({ title, value, icon, color, subtext }: any) => (
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gold-100 flex items-center justify-between">
+            <div>
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
+                <h3 className="text-3xl font-serif font-bold text-gold-900">{value}</h3>
+                {subtext && <p className="text-xs text-gray-400 mt-1">{subtext}</p>}
+            </div>
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-md ${color}`}>
+                <span className="material-symbols-outlined text-2xl">{icon}</span>
+            </div>
+        </div>
+    );
 
     return (
-        <div className="min-h-screen bg-gray-900 text-gray-100 font-sans">
-            {/* Header */}
-            <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-20 shadow-md">
-                <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gold-600 rounded-lg flex items-center justify-center text-white">
-                            <span className="material-symbols-outlined">admin_panel_settings</span>
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-white tracking-wide">J.C SISTEMAS</h1>
-                            <p className="text-xs text-gold-500 font-bold uppercase tracking-wider">Super Admin Dashboard</p>
-                        </div>
+        <div className="space-y-8 animate-fade-in">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard 
+                    title="Receita Mensal" 
+                    value={`R$ ${stats.totalRevenue}`} 
+                    icon="payments" 
+                    color="bg-zinc-800" 
+                    subtext="Faturamento Recorrente"
+                />
+                <StatCard 
+                    title="Assinantes Ativos" 
+                    value={stats.activeSalons} 
+                    icon="verified" 
+                    color="bg-green-600" 
+                    subtext={`${stats.conversionRate.toFixed(1)}% de Retenção`}
+                />
+                <StatCard 
+                    title="Em Teste (Trial)" 
+                    value={stats.trialSalons} 
+                    icon="timelapse" 
+                    color="bg-blue-500" 
+                    subtext="Potenciais conversões"
+                />
+                <StatCard 
+                    title="Atenção Necessária" 
+                    value={expiringSoon.length} 
+                    icon="notification_important" 
+                    color="bg-orange-500" 
+                    subtext="Vencendo em 5 dias"
+                />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Growth Chart */}
+                <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-gold-100 flex flex-col">
+                    <h3 className="font-serif text-xl font-bold text-gold-900 mb-6">Crescimento da Plataforma</h3>
+                    <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartData}>
+                                <defs>
+                                    <linearGradient id="colorSalons" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#C5A059" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#C5A059" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
+                                <Tooltip contentStyle={{borderRadius: '8px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}} />
+                                <Area type="monotone" dataKey="salons" stroke="#C5A059" strokeWidth={3} fillOpacity={1} fill="url(#colorSalons)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
                     </div>
-                    <button onClick={handleLogout} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-                        <span className="material-symbols-outlined">logout</span>
-                        Sair
+                </div>
+
+                {/* Attention Widget (Vencimentos) */}
+                <div className="bg-white p-6 rounded-3xl shadow-xl border border-gold-100 flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-serif text-lg font-bold text-gold-900 flex items-center gap-2">
+                             <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                             Atenção Imediata
+                        </h3>
+                        <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded">Vencimentos</span>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto space-y-4">
+                        {expiringSoon.length === 0 ? (
+                            <div className="text-center text-gray-400 py-8">
+                                <span className="material-symbols-outlined text-4xl mb-2">check_circle</span>
+                                <p className="text-sm">Nenhum vencimento próximo.</p>
+                            </div>
+                        ) : (
+                            expiringSoon.map(s => {
+                                const days = differenceInDays(new Date(s.subscription_end_date!), new Date());
+                                return (
+                                    <div key={s.id} className="flex items-center justify-between p-3 rounded-xl bg-orange-50/50 border border-orange-100">
+                                        <div className="min-w-0">
+                                            <h4 className="font-bold text-gray-800 text-sm truncate">{s.name}</h4>
+                                            <p className="text-xs text-orange-600 font-bold">Vence em {days === 0 ? 'hoje' : `${days} dias`}</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleWhatsApp(s)}
+                                            className="w-8 h-8 flex items-center justify-center bg-green-500 text-white rounded-full hover:bg-green-600 shadow-sm"
+                                            title="Cobrar no WhatsApp"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">chat</span>
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                    
+                    <button 
+                        onClick={() => navigate('/super-admin/salons?filter=EXPIRED')}
+                        className="w-full mt-4 py-2 text-xs font-bold text-gray-500 hover:text-gold-600 border-t border-gray-100"
+                    >
+                        Ver Inadimplentes (Expirados)
                     </button>
                 </div>
-            </header>
-
-            <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-                
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-lg">
-                        <p className="text-gray-400 text-xs font-bold uppercase">Total Clientes</p>
-                        <h3 className="text-3xl font-bold text-white mt-1">{stats.total}</h3>
-                    </div>
-                    <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-lg">
-                        <p className="text-gray-400 text-xs font-bold uppercase">Ativos</p>
-                        <h3 className="text-3xl font-bold text-emerald-400 mt-1">{stats.active}</h3>
-                    </div>
-                    <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-lg">
-                        <p className="text-gray-400 text-xs font-bold uppercase">Em Teste</p>
-                        <h3 className="text-3xl font-bold text-blue-400 mt-1">{stats.trial}</h3>
-                    </div>
-                    <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-lg">
-                        <p className="text-gray-400 text-xs font-bold uppercase">Bloqueados</p>
-                        <h3 className="text-3xl font-bold text-red-400 mt-1">{stats.blocked}</h3>
-                    </div>
-                </div>
-
-                {/* Global Settings */}
-                <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden">
-                    <div className="p-6 border-b border-gray-700 flex justify-between items-center">
-                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-gold-500">settings</span>
-                            Configurações Globais
-                         </h2>
-                    </div>
-                    <div className="p-6 flex items-center gap-8">
-                        <div>
-                            <p className="text-sm font-bold text-gray-400 mb-2">Logotipo Padrão do Sistema</p>
-                            <div className="flex items-center gap-4">
-                                <div className="w-20 h-20 bg-gray-900 rounded-lg border border-gray-600 flex items-center justify-center overflow-hidden">
-                                    {globalSettings?.default_logo_url ? (
-                                        <img src={globalSettings.default_logo_url} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="material-symbols-outlined text-gray-600">image</span>
-                                    )}
-                                </div>
-                                <div>
-                                    <input 
-                                        type="file" 
-                                        ref={fileInputRef} 
-                                        className="hidden" 
-                                        onChange={handleGlobalLogoUpload} 
-                                        accept="image/*"
-                                    />
-                                    <button 
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={isUploading}
-                                        className="px-4 py-2 bg-gold-600 hover:bg-gold-700 text-white text-sm font-bold rounded-lg transition-colors"
-                                    >
-                                        {isUploading ? 'Enviando...' : 'Alterar Logo Padrão'}
-                                    </button>
-                                    <p className="text-xs text-gray-500 mt-2">Exibido para novos usuários sem logo.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Clients Table */}
-                <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl">
-                    <div className="p-6 border-b border-gray-700">
-                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                            <span className="material-symbols-outlined text-gold-500">group</span>
-                            Gestão de Clientes (Assinaturas)
-                        </h2>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-900/50 text-gray-400 text-xs uppercase font-bold tracking-wider">
-                                <tr>
-                                    <th className="p-4">Cliente / Estabelecimento</th>
-                                    <th className="p-4">Status Atual</th>
-                                    <th className="p-4">Expiração / Tempo</th>
-                                    <th className="p-4 text-center">Ações Rápidas</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700 text-sm">
-                                {salons.map(salon => (
-                                    <tr key={salon.id} className="hover:bg-gray-700/30 transition-colors">
-                                        <td className="p-4">
-                                            <div className="font-bold text-white text-base">{salon.name}</div>
-                                            <div className="text-gray-500">{salon.owner_email}</div>
-                                            <div className="text-xs text-gray-600 mt-1">Criado em: {format(new Date(salon.created_at), 'dd/MM/yyyy')}</div>
-                                        </td>
-                                        <td className="p-4">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
-                                                salon.subscription_status === 'ACTIVE' || salon.is_lifetime_free ? 'bg-green-900/50 text-green-400 border border-green-800' :
-                                                salon.subscription_status === 'BLOCKED' ? 'bg-red-900/50 text-red-400 border border-red-800' :
-                                                salon.subscription_status === 'EXPIRED' ? 'bg-orange-900/50 text-orange-400 border border-orange-800' :
-                                                'bg-blue-900/50 text-blue-400 border border-blue-800'
-                                            }`}>
-                                                {salon.is_lifetime_free ? 'LIFETIME' : salon.subscription_status}
-                                            </span>
-                                        </td>
-                                        <td className="p-4">
-                                            {getExpirationDisplay(salon)}
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex justify-center gap-2">
-                                                <button 
-                                                    onClick={() => handleToggleStatus(salon)}
-                                                    title={salon.subscription_status === 'BLOCKED' ? "Desbloquear" : "Bloquear"}
-                                                    className={`p-2 rounded-lg transition-colors ${
-                                                        salon.subscription_status === 'BLOCKED' 
-                                                        ? 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white' 
-                                                        : 'bg-gray-700 text-gray-300 hover:bg-red-500 hover:text-white'
-                                                    }`}
-                                                >
-                                                    <span className="material-symbols-outlined text-lg">block</span>
-                                                </button>
-                                                
-                                                <button 
-                                                    onClick={() => handleGrantLifetime(salon)}
-                                                    title="Alternar Acesso Vitalício"
-                                                    className={`p-2 rounded-lg transition-colors ${
-                                                        salon.is_lifetime_free 
-                                                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
-                                                        : 'bg-gray-700 text-gray-300 hover:bg-emerald-500 hover:text-white'
-                                                    }`}
-                                                >
-                                                    <span className="material-symbols-outlined text-lg">verified</span>
-                                                </button>
-
-                                                <button 
-                                                    onClick={() => setSelectedSalon(salon)}
-                                                    title="Definir Data de Expiração"
-                                                    className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-blue-500 hover:text-white transition-colors"
-                                                >
-                                                    <span className="material-symbols-outlined text-lg">calendar_clock</span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-            </main>
-
-            {/* Date Modal */}
-            {selectedSalon && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                    <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-sm">
-                        <h3 className="text-lg font-bold text-white mb-4">Definir Expiração</h3>
-                        <p className="text-sm text-gray-400 mb-4">
-                            Para: <span className="text-white font-bold">{selectedSalon.name}</span>
-                        </p>
-                        <form onSubmit={handleSetExpiration} className="space-y-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Nova Data Limite</label>
-                                <input 
-                                    type="date" 
-                                    required 
-                                    className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none focus:border-gold-500 mt-1"
-                                    value={extensionDate}
-                                    onChange={e => setExtensionDate(e.target.value)}
-                                />
-                            </div>
-                            <div className="flex gap-3">
-                                <button type="button" onClick={() => setSelectedSalon(null)} className="flex-1 py-2 text-gray-400 hover:text-white">Cancelar</button>
-                                <button type="submit" className="flex-1 py-2 bg-gold-600 hover:bg-gold-700 text-white font-bold rounded-lg">Salvar</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            </div>
         </div>
     );
 };

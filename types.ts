@@ -21,7 +21,7 @@ export enum SubscriptionStatus {
   CANCELLED = 'CANCELLED'
 }
 
-export type SubscriptionPlan = 'FREE' | 'MONTHLY' | 'YEARLY' | 'LIFETIME';
+export type SubscriptionPlan = 'FREE' | 'MONTHLY' | 'YEARLY' | 'LIFETIME' | string;
 
 export interface TimeSlot {
   start: string; // "08:00"
@@ -52,11 +52,24 @@ export interface Salon {
   
   created_at: string; // To calculate trial period
   owner_email?: string;
+  last_login?: string; // ISO Date for Churn monitoring
+}
+
+export interface SystemPlan {
+  id: string;
+  name: string;
+  price: number;
+  period: 'monthly' | 'yearly';
+  features: string[];
+  is_popular?: boolean;
+  is_public?: boolean; // New: Hide plan from public view
 }
 
 export interface GlobalSettings {
   id: string;
   default_logo_url: string;
+  app_name?: string; // White Label Name
+  broadcast_message?: string; // Global System Notification
   updated_at: string;
 }
 
@@ -112,13 +125,6 @@ export interface Order {
   created_at: string;
   product_name?: string; // joined for display
   product_price?: number; // joined for display
-}
-
-export interface User {
-  id: string;
-  email: string;
-  salon_id: string;
-  role: 'ADMIN' | 'SUPER_ADMIN';
 }
 
 export interface BlockedTime {

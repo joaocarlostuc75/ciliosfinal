@@ -1,32 +1,38 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../services/mockDb';
-import { Service } from '../../types';
+import { Service, Salon } from '../../types';
 
 export const ServicesManager: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [currentSalon, setCurrentSalon] = useState<Salon | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({ name: '', price: '', duration: '', description: '', image_url: '' });
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadServices = async () => {
+  const loadData = async () => {
     setServices(await db.getServices());
+    setCurrentSalon(await db.getSalon());
   };
 
   useEffect(() => {
-    loadServices();
+    loadData();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isUploading) return;
 
+    // Safety check - should always be true if page is accessible
+    if (!currentSalon) return;
+
     const newService: Service = {
         id: editingService ? editingService.id : crypto.randomUUID(),
-        salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
+        salon_id: currentSalon.id, // Dynamic ID
         name: formData.name,
         price: Number(formData.price),
         duration_min: Number(formData.duration),
@@ -39,7 +45,7 @@ export const ServicesManager: React.FC = () => {
     } else {
         await db.addService(newService);
     }
-    await loadServices();
+    await loadData();
     closeModal();
   };
 
@@ -81,7 +87,7 @@ export const ServicesManager: React.FC = () => {
   const handleDelete = async (id: string) => {
       if(confirm('Tem certeza?')) {
           await db.deleteService(id);
-          await loadServices();
+          await loadData();
       }
   };
 

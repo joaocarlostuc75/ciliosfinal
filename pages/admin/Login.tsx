@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
@@ -24,7 +25,12 @@ export const Login: React.FC = () => {
       if (mode === 'login') {
         const res = await db.login(email, password);
         if (res.success) {
-          navigate('/admin');
+          // Direct navigation based on role
+          if (res.role === 'SUPER_ADMIN') {
+             navigate('/super-admin', { replace: true });
+          } else {
+             navigate('/admin', { replace: true });
+          }
         } else {
           setMessage({ type: 'error', text: res.message || 'Usuário ou senha inválidos.' });
         }
@@ -47,7 +53,7 @@ export const Login: React.FC = () => {
             
             // Check if user was automatically logged in (Email confirmation disabled on DB)
             if (db.isAuthenticated()) {
-                setTimeout(() => navigate('/admin'), 1500);
+                setTimeout(() => navigate('/admin', { replace: true }), 1500);
             } else {
                 // Otherwise wait and switch to login
                 setTimeout(() => setMode('login'), 3000);
@@ -195,13 +201,20 @@ export const Login: React.FC = () => {
                  </button>
              )}
              
-             <div className="border-t border-gray-100 pt-4 mt-4">
+             <div className="border-t border-gray-100 pt-4 mt-4 text-center">
                 <button 
                   onClick={() => navigate('/')}
-                  className="w-full text-xs text-gray-300 hover:text-gold-600 transition-colors"
+                  className="w-full text-xs text-gray-300 hover:text-gold-600 transition-colors mb-4"
                 >
                   Voltar para o site público
                 </button>
+                
+                {/* Developer Hints */}
+                <div className="bg-gray-50 p-2 rounded border border-gray-100 inline-block text-left">
+                     <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Credenciais de Teste:</p>
+                     <p className="text-[10px] text-gray-500">Super Admin: <span className="font-mono">joaocarlostuc75@gmail.com</span> / <span className="font-mono">admin123</span></p>
+                     <p className="text-[10px] text-gray-500">Admin: <span className="font-mono">admin@teste.com</span> / <span className="font-mono">123456</span></p>
+                </div>
              </div>
         </div>
       </div>

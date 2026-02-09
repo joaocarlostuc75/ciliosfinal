@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
 import { Appointment, Service, Client, BlockedTime, AppointmentStatus, Salon } from '../../types';
@@ -7,7 +6,7 @@ import {
     endOfDay, endOfMonth, eachDayOfInterval, 
     endOfWeek, isSameMonth, addMonths, isBefore
 } from 'date-fns';
-import { pt } from 'date-fns/locale';
+import ptBR from 'date-fns/locale/pt-BR';
 
 // Helpers for missing date-fns functions
 const startOfMonth = (date: Date) => {
@@ -307,7 +306,7 @@ export const Schedule: React.FC = () => {
              <div className="mb-6 opacity-60">
                 {showHeader && (
                     <h4 className="font-serif font-bold text-gray-400 mb-2 flex items-center gap-2">
-                        {format(date, "EEEE, dd 'de' MMMM", { locale: pt })}
+                        {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                         {isToday && <span className="bg-gold-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase">Hoje</span>}
                     </h4>
                 )}
@@ -322,7 +321,7 @@ export const Schedule: React.FC = () => {
           <div className="mb-6">
               {showHeader && (
                 <h4 className={`font-serif font-bold text-lg mb-3 flex items-center gap-2 ${isToday ? 'text-gold-700' : 'text-gray-700'}`}>
-                    {format(date, "EEEE, dd 'de' MMMM", { locale: pt })}
+                    {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                     {isToday && <span className="bg-gold-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase">Hoje</span>}
                 </h4>
               )}
@@ -429,7 +428,7 @@ export const Schedule: React.FC = () => {
                     <span className="material-symbols-outlined">chevron_left</span>
                 </button>
                 <h2 className="font-serif font-bold text-gold-900 capitalize">
-                    {format(currentMonth, 'MMMM yyyy', { locale: pt })}
+                    {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
                 </h2>
                 <button 
                     onClick={() => handleMonthChange('next')} 
@@ -540,7 +539,7 @@ export const Schedule: React.FC = () => {
                     <div className="space-y-4">
                         <div className="text-center mb-6">
                             <span className="px-3 py-1 bg-gold-50 text-gold-800 rounded-full text-xs font-bold uppercase tracking-widest border border-gold-100">
-                                Semana de {format(startOfWeek(selectedDate), "dd 'de' MMM", { locale: pt })} a {format(endOfWeek(selectedDate), "dd 'de' MMM", { locale: pt })}
+                                Semana de {format(startOfWeek(selectedDate), "dd 'de' MMM", { locale: ptBR })} a {format(endOfWeek(selectedDate), "dd 'de' MMM", { locale: ptBR })}
                             </span>
                         </div>
                         {eachDayOfInterval({ start: startOfWeek(selectedDate), end: endOfWeek(selectedDate) })
@@ -559,7 +558,7 @@ export const Schedule: React.FC = () => {
                     <div className="space-y-4">
                          <div className="text-center mb-6">
                             <span className="px-3 py-1 bg-gold-50 text-gold-800 rounded-full text-xs font-bold uppercase tracking-widest border border-gold-100">
-                                {format(selectedDate, "MMMM 'de' yyyy", { locale: pt })}
+                                {format(selectedDate, "MMMM 'de' yyyy", { locale: ptBR })}
                             </span>
                         </div>
                         {eachDayOfInterval({ start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) })

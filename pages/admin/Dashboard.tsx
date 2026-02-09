@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { db } from '../../services/mockDb';
 import { AppointmentStatus, OrderStatus } from '../../types';
@@ -7,7 +6,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { format, eachDayOfInterval, isSameDay, isSameMonth } from 'date-fns';
-import { pt } from 'date-fns/locale';
+import ptBR from 'date-fns/locale/pt-BR';
 
 export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -176,7 +175,7 @@ export const Dashboard: React.FC = () => {
         <div>
             <h2 className="text-gray-500 font-sans text-sm">Visão Geral</h2>
             <p className="text-gold-900 font-serif text-2xl font-bold capitalize">
-                {format(new Date(), "MMMM 'de' yyyy", { locale: pt })}
+                {format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}
             </p>
         </div>
         <div className="text-right hidden md:block">
