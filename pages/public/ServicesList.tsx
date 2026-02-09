@@ -77,34 +77,41 @@ export const ServicesList: React.FC = () => {
             {activeTab === 'services' && services.map((service, index) => (
                 <div 
                     key={service.id} 
-                    className="bg-white rounded-[2rem] p-4 shadow-lg border border-gold-50 group hover:border-gold-300 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col h-full animate-fade-in"
+                    className="group bg-white rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl border border-gray-100 hover:border-gold-200 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full animate-fade-in"
                     style={{ animationDelay: `${index * 50}ms` }}
                 >
-                    <div className="aspect-square rounded-[1.5rem] overflow-hidden mb-5 relative bg-gray-100 shadow-inner">
+                    {/* Image Area with Zoom */}
+                    <div className="relative aspect-square overflow-hidden bg-gray-100">
                         <img 
                             src={service.image_url} 
                             alt={service.name} 
-                            className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-out" 
+                            className="w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-110" 
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity duration-500" />
-                        <span className="absolute bottom-3 right-3 bg-white/95 backdrop-blur text-gold-900 px-3 py-1.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-1 border border-gold-100">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 transition-opacity duration-300 group-hover:opacity-40" />
+                        
+                        {/* Floating Price Tag */}
+                        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-gold-100 z-10">
+                            <span className="text-gold-700 font-bold font-sans text-sm">R$ {service.price.toFixed(2)}</span>
+                        </div>
+
+                        {/* Duration Badge */}
+                        <div className="absolute bottom-4 left-4 flex items-center gap-1 text-white/90 text-xs font-medium bg-black/30 backdrop-blur-sm px-2 py-1 rounded-lg">
                             <span className="material-symbols-outlined text-sm">schedule</span>
                             {Math.floor(service.duration_min / 60)}h {service.duration_min % 60 > 0 ? `${service.duration_min % 60}m` : ''}
-                        </span>
+                        </div>
                     </div>
                     
-                    <div className="space-y-3 px-1 flex-1 flex flex-col">
-                        <div className="flex justify-between items-start gap-2">
-                            <h3 className="font-serif text-xl font-bold text-gold-900 leading-tight group-hover:text-gold-600 transition-colors">{service.name}</h3>
-                            <span className="text-gold-600 font-bold font-sans whitespace-nowrap bg-gold-50 px-2 py-1 rounded-lg">R$ {service.price.toFixed(2)}</span>
-                        </div>
-                        <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed flex-1 border-t border-gray-50 pt-3 mt-1">
+                    {/* Details */}
+                    <div className="p-6 flex flex-col flex-1">
+                        <h3 className="font-serif text-xl font-bold text-gold-900 leading-tight mb-2 group-hover:text-gold-600 transition-colors line-clamp-1">{service.name}</h3>
+                        
+                        <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed flex-1 mb-6">
                             {service.description}
                         </p>
                         
                         <button 
                             onClick={() => navigate(`/book/${service.id}`)}
-                            className="w-full mt-4 bg-gold-500 text-white py-3.5 rounded-xl font-bold text-sm tracking-wide shadow-md hover:bg-gold-600 hover:shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 group-hover:bg-gold-600"
+                            className="w-full bg-gold-500 text-white py-3.5 rounded-xl font-bold text-sm tracking-wide shadow-md hover:bg-gold-600 hover:shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
                             <span className="material-symbols-outlined text-lg">calendar_add_on</span>
                             AGENDAR
@@ -117,41 +124,52 @@ export const ServicesList: React.FC = () => {
             {activeTab === 'products' && products.map((product, index) => (
                 <div 
                     key={product.id} 
-                    className="bg-white rounded-[2rem] p-4 shadow-lg border border-gold-50 group hover:border-gold-300 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col h-full animate-fade-in"
+                    className="group bg-white rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl border border-gray-100 hover:border-gold-200 transition-all duration-300 hover:-translate-y-1 flex flex-col h-full animate-fade-in"
                     style={{ animationDelay: `${index * 50}ms` }}
                 >
-                    <div className="aspect-square rounded-[1.5rem] overflow-hidden mb-5 relative bg-gray-100 shadow-inner">
+                    {/* Image Area with Zoom */}
+                    <div className="relative aspect-square overflow-hidden bg-gray-100">
                         {product.image_url ? (
                              <img 
                                 src={product.image_url} 
                                 alt={product.name} 
-                                className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 ease-out" 
+                                className="w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-110" 
                              />
                         ) : (
-                             <div className="w-full h-full flex items-center justify-center text-gold-200 group-hover:text-gold-300 transition-colors">
+                             <div className="w-full h-full flex items-center justify-center text-gold-200 bg-gold-50 group-hover:text-gold-300 transition-colors">
                                 <span className="material-symbols-outlined text-6xl">inventory_2</span>
                              </div>
                         )}
-                        <div className="absolute top-3 left-3">
-                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold shadow-md border ${product.stock > 0 ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                        
+                        {/* Floating Price Tag */}
+                        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-gold-100 z-10">
+                            <span className="text-gold-700 font-bold font-sans text-sm">R$ {product.price.toFixed(2)}</span>
+                        </div>
+
+                        {/* Stock Badge */}
+                        <div className="absolute bottom-4 left-4">
+                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold shadow-md border backdrop-blur-sm ${
+                                product.stock > 0 
+                                ? 'bg-green-50/90 text-green-700 border-green-100' 
+                                : 'bg-red-50/90 text-red-700 border-red-100'
+                             }`}>
                                 {product.stock > 0 ? `${product.stock} un. disponíveis` : 'Esgotado'}
                              </span>
                         </div>
                     </div>
                     
-                    <div className="space-y-3 px-1 flex-1 flex flex-col">
-                        <div className="flex justify-between items-start gap-2">
-                            <h3 className="font-serif text-xl font-bold text-gold-900 leading-tight group-hover:text-gold-600 transition-colors">{product.name}</h3>
-                            <span className="text-gold-600 font-bold font-sans whitespace-nowrap bg-gold-50 px-2 py-1 rounded-lg">R$ {product.price.toFixed(2)}</span>
-                        </div>
-                        <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed flex-1 border-t border-gray-50 pt-3 mt-1">
+                    {/* Details */}
+                    <div className="p-6 flex flex-col flex-1">
+                        <h3 className="font-serif text-xl font-bold text-gold-900 leading-tight mb-2 group-hover:text-gold-600 transition-colors line-clamp-1">{product.name}</h3>
+                        
+                        <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed flex-1 mb-6">
                             {product.description || 'Produto de alta qualidade para manutenção e cuidados.'}
                         </p>
                         
                         <button 
                             onClick={() => navigate(`/order/${product.id}`)}
                             disabled={product.stock <= 0}
-                            className="w-full mt-4 bg-gray-900 text-white py-3.5 rounded-xl font-bold text-sm tracking-wide shadow-md hover:bg-black hover:shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                            className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold text-sm tracking-wide shadow-md hover:bg-black hover:shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
                         >
                             <span className="material-symbols-outlined text-lg">shopping_bag</span>
                             {product.stock > 0 ? 'TENHO INTERESSE' : 'INDISPONÍVEL'}

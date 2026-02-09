@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { format, eachDayOfInterval, isSameDay, isSameMonth } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { pt } from 'date-fns/locale';
 
 export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -28,116 +28,121 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
-        const appts = await db.getAppointments();
-        const services = await db.getServices();
-        const orders = await db.getOrders();
-        const products = await db.getProducts();
+        try {
+            const appts = await db.getAppointments();
+            const services = await db.getServices();
+            const orders = await db.getOrders();
+            const products = await db.getProducts();
 
-        const today = new Date();
-        
-        // Manual start of month calculation
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        monthStart.setHours(0, 0, 0, 0);
-        
-        // Manual end of month calculation
-        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        monthEnd.setHours(23, 59, 59, 999);
+            const today = new Date();
+            
+            // Manual start of month calculation
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            monthStart.setHours(0, 0, 0, 0);
+            
+            // Manual end of month calculation
+            const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            monthEnd.setHours(23, 59, 59, 999);
 
-        // --- 1. Filter Current Month Data ---
-        const monthAppts = appts.filter(a => isSameMonth(new Date(a.start_time), today));
-        const monthOrders = orders.filter(o => isSameMonth(new Date(o.created_at), today));
+            // --- 1. Filter Current Month Data ---
+            const monthAppts = appts.filter(a => isSameMonth(new Date(a.start_time), today));
+            const monthOrders = orders.filter(o => isSameMonth(new Date(o.created_at), today));
 
-        // --- 2. Calculate Metrics ---
-        let serviceRev = 0;
-        let productRev = 0;
-        let completedApptsCount = 0;
-        let completedOrdersCount = 0;
-        const itemCounts: Record<string, number> = {};
+            // --- 2. Calculate Metrics ---
+            let serviceRev = 0;
+            let productRev = 0;
+            let completedApptsCount = 0;
+            let completedOrdersCount = 0;
+            const itemCounts: Record<string, number> = {};
 
-        // Process Appointments
-        monthAppts.forEach(a => {
-            const service = services.find(s => s.id === a.service_id);
-            const price = service ? service.price : 0;
-            const serviceName = service ? service.name : 'Serviço desconhecido';
+            // Process Appointments
+            monthAppts.forEach(a => {
+                const service = services.find(s => s.id === a.service_id);
+                const price = service ? service.price : 0;
+                const serviceName = service ? service.name : 'Serviço desconhecido';
 
-            if (a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CONFIRMED) {
-                serviceRev += price;
-                completedApptsCount++;
-                itemCounts[serviceName] = (itemCounts[serviceName] || 0) + 1;
-            }
-        });
+                if (a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CONFIRMED) {
+                    serviceRev += price;
+                    completedApptsCount++;
+                    itemCounts[serviceName] = (itemCounts[serviceName] || 0) + 1;
+                }
+            });
 
-        // Process Orders
-        monthOrders.forEach(o => {
-            const product = products.find(p => p.id === o.product_id);
-            // Use current price, or 0 if product deleted. ideally order should store historical price
-            const price = product ? product.price : 0; 
-            const productName = product ? `(Prod) ${product.name}` : 'Produto desconhecido';
+            // Process Orders
+            monthOrders.forEach(o => {
+                const product = products.find(p => p.id === o.product_id);
+                // Use current price, or 0 if product deleted. ideally order should store historical price
+                const price = product ? product.price : 0; 
+                const productName = product ? `(Prod) ${product.name}` : 'Produto desconhecido';
 
-            if (o.status === OrderStatus.COMPLETED) {
-                productRev += price;
-                completedOrdersCount++;
-                itemCounts[productName] = (itemCounts[productName] || 0) + 1;
-            }
-        });
+                if (o.status === OrderStatus.COMPLETED) {
+                    productRev += price;
+                    completedOrdersCount++;
+                    itemCounts[productName] = (itemCounts[productName] || 0) + 1;
+                }
+            });
 
-        const totalRevenue = serviceRev + productRev;
-        const totalTransactions = completedApptsCount + completedOrdersCount;
-        const ticket = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
+            const totalRevenue = serviceRev + productRev;
+            const totalTransactions = completedApptsCount + completedOrdersCount;
+            const ticket = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
 
-        setMetrics({
-            totalRevenue,
-            serviceRevenue: serviceRev,
-            productRevenue: productRev,
-            monthlyAppointments: completedApptsCount,
-            monthlyOrders: completedOrdersCount,
-            averageTicket: ticket,
-        });
+            setMetrics({
+                totalRevenue,
+                serviceRevenue: serviceRev,
+                productRevenue: productRev,
+                monthlyAppointments: completedApptsCount,
+                monthlyOrders: completedOrdersCount,
+                averageTicket: ticket,
+            });
 
-        // --- 3. Prepare Chart Data: Revenue over Time (Daily) ---
-        const chartEndDate = (today > monthEnd) ? monthEnd : today;
-        const daysInMonth = eachDayOfInterval({ start: monthStart, end: chartEndDate });
-        
-        const chartData = daysInMonth.map(day => {
-            // Service Revenue for Day
-            const dayAppts = monthAppts.filter(a => 
-                isSameDay(new Date(a.start_time), day) && 
-                (a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CONFIRMED)
-            );
-            const dayServiceRevenue = dayAppts.reduce((acc, curr) => {
-                const s = services.find(serv => serv.id === curr.service_id);
-                return acc + (s ? s.price : 0);
-            }, 0);
+            // --- 3. Prepare Chart Data: Revenue over Time (Daily) ---
+            const chartEndDate = (today > monthEnd) ? monthEnd : today;
+            const daysInMonth = eachDayOfInterval({ start: monthStart, end: chartEndDate });
+            
+            const chartData = daysInMonth.map(day => {
+                // Service Revenue for Day
+                const dayAppts = monthAppts.filter(a => 
+                    isSameDay(new Date(a.start_time), day) && 
+                    (a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CONFIRMED)
+                );
+                const dayServiceRevenue = dayAppts.reduce((acc, curr) => {
+                    const s = services.find(serv => serv.id === curr.service_id);
+                    return acc + (s ? s.price : 0);
+                }, 0);
 
-            // Product Revenue for Day
-            const dayOrders = monthOrders.filter(o => 
-                isSameDay(new Date(o.created_at), day) &&
-                o.status === OrderStatus.COMPLETED
-            );
-            const dayProductRevenue = dayOrders.reduce((acc, curr) => {
-                const p = products.find(prod => prod.id === curr.product_id);
-                return acc + (p ? p.price : 0);
-            }, 0);
+                // Product Revenue for Day
+                const dayOrders = monthOrders.filter(o => 
+                    isSameDay(new Date(o.created_at), day) &&
+                    o.status === OrderStatus.COMPLETED
+                );
+                const dayProductRevenue = dayOrders.reduce((acc, curr) => {
+                    const p = products.find(prod => prod.id === curr.product_id);
+                    return acc + (p ? p.price : 0);
+                }, 0);
 
-            return {
-                date: format(day, 'dd/MM'),
-                faturamento: dayServiceRevenue + dayProductRevenue,
-                servicos: dayServiceRevenue,
-                produtos: dayProductRevenue
-            };
-        });
-        setRevenueData(chartData);
+                return {
+                    date: format(day, 'dd/MM'),
+                    faturamento: dayServiceRevenue + dayProductRevenue,
+                    servicos: dayServiceRevenue,
+                    produtos: dayProductRevenue
+                };
+            });
+            setRevenueData(chartData);
 
-        // --- 4. Prepare Pie Chart Data: Top Items (Services + Products) ---
-        const pieData = Object.entries(itemCounts)
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 5); // Top 5 items
-        
-        setTopItemsData(pieData);
-        setLoading(false);
+            // --- 4. Prepare Pie Chart Data: Top Items (Services + Products) ---
+            const pieData = Object.entries(itemCounts)
+                .map(([name, value]) => ({ name, value }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 5); // Top 5 items
+            
+            setTopItemsData(pieData);
+        } catch (error) {
+            console.error("Dashboard data load failed", error);
+        } finally {
+            setLoading(false);
+        }
     };
-
+    
     fetchData();
   }, []);
 
@@ -155,7 +160,12 @@ export const Dashboard: React.FC = () => {
   );
 
   if (loading) {
-      return <div className="p-10 text-center text-gold-600">Carregando indicadores...</div>;
+      return (
+        <div className="flex flex-col items-center justify-center h-64 text-gold-600">
+            <span className="material-symbols-outlined text-4xl animate-spin mb-2">progress_activity</span>
+            <p>Carregando indicadores...</p>
+        </div>
+      );
   }
 
   return (
@@ -166,7 +176,7 @@ export const Dashboard: React.FC = () => {
         <div>
             <h2 className="text-gray-500 font-sans text-sm">Visão Geral</h2>
             <p className="text-gold-900 font-serif text-2xl font-bold capitalize">
-                {format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}
+                {format(new Date(), "MMMM 'de' yyyy", { locale: pt })}
             </p>
         </div>
         <div className="text-right hidden md:block">
@@ -218,7 +228,8 @@ export const Dashboard: React.FC = () => {
                 <span className="text-xs text-gray-400 uppercase tracking-widest">Diário</span>
             </div>
             
-            <div className="w-full h-[300px]">
+            {/* IMPORTANT: Explicit Style Height to prevent Recharts crash */}
+            <div className="w-full" style={{ height: '300px', minHeight: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <defs>
@@ -263,7 +274,8 @@ export const Dashboard: React.FC = () => {
             <h3 className="font-serif text-xl font-bold text-gold-900 mb-2">Top Itens</h3>
             <p className="text-xs text-gray-400 mb-6">Serviços e Produtos mais vendidos</p>
             
-            <div className="w-full h-[300px] relative">
+             {/* IMPORTANT: Explicit Style Height to prevent Recharts crash */}
+            <div className="w-full relative" style={{ height: '300px', minHeight: '300px' }}>
                 {topItemsData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>

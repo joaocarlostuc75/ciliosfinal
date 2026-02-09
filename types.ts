@@ -1,4 +1,5 @@
 
+
 export enum AppointmentStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -16,8 +17,11 @@ export enum SubscriptionStatus {
   TRIAL = 'TRIAL',
   ACTIVE = 'ACTIVE',
   EXPIRED = 'EXPIRED',
-  BLOCKED = 'BLOCKED'
+  BLOCKED = 'BLOCKED',
+  CANCELLED = 'CANCELLED'
 }
+
+export type SubscriptionPlan = 'FREE' | 'MONTHLY' | 'YEARLY' | 'LIFETIME';
 
 export interface TimeSlot {
   start: string; // "08:00"
@@ -39,9 +43,21 @@ export interface Salon {
   address: string;
   theme_color?: string;
   opening_hours: DaySchedule[]; // Structured data instead of string
+  
+  // Subscription Fields
   subscription_status: SubscriptionStatus;
+  subscription_plan: SubscriptionPlan;
+  subscription_end_date?: string; // ISO Date
+  is_lifetime_free?: boolean;
+  
   created_at: string; // To calculate trial period
   owner_email?: string;
+}
+
+export interface GlobalSettings {
+  id: string;
+  default_logo_url: string;
+  updated_at: string;
 }
 
 export interface Service {

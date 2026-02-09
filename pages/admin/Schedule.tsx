@@ -1,12 +1,34 @@
+
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
 import { Appointment, Service, Client, BlockedTime, AppointmentStatus, Salon } from '../../types';
 import { 
     format, addDays, isSameDay, addMinutes, areIntervalsOverlapping, 
-    endOfDay, startOfMonth, endOfMonth, eachDayOfInterval, 
-    startOfWeek, endOfWeek, isSameMonth, addMonths, subMonths, isBefore
+    endOfDay, endOfMonth, eachDayOfInterval, 
+    endOfWeek, isSameMonth, addMonths, isBefore
 } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { pt } from 'date-fns/locale';
+
+// Helpers for missing date-fns functions
+const startOfMonth = (date: Date) => {
+    const d = new Date(date);
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+};
+
+const startOfWeek = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day;
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+};
+
+const subMonths = (date: Date, amount: number) => {
+    return addMonths(date, -amount);
+};
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -31,6 +53,7 @@ export const Schedule: React.FC = () => {
   // Modals
   const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [isApptModalOpen, setIsApptModalOpen] = useState(false);
   
   // Action State
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
@@ -40,6 +63,15 @@ export const Schedule: React.FC = () => {
     startDate: '', startTime: '09:00', endDate: '', endTime: '18:00', reason: 'Ausência' 
   });
   const [rescheduleFormData, setRescheduleFormData] = useState({ date: '', time: '' });
+  
+  // New Appointment Form Data
+  const [apptFormData, setApptFormData] = useState({
+      clientName: '',
+      clientPhone: '',
+      serviceId: '',
+      date: '',
+      time: '09:00'
+  });
 
   useEffect(() => {
     loadData();
@@ -58,9 +90,11 @@ export const Schedule: React.FC = () => {
   const getClientData = (id: string) => clients.find(c => c.id === id);
 
   // --- Actions ---
-  const handleNotifyClient = (appt: Appointment) => {
+  
+  // Updated to accept optional client object for immediate notification after creation
+  const handleNotifyClient = (appt: Appointment, clientOverride?: Client) => {
     if (!salon) return;
-    const client = getClientData(appt.client_id);
+    const client = clientOverride || getClientData(appt.client_id);
     if (!client) return;
 
     const serviceName = getServiceName(appt.service_id);
@@ -70,7 +104,7 @@ export const Schedule: React.FC = () => {
     // Formal but friendly message
     const msg = `Olá ${client.name}, tudo bem? 🌸\n\nPassando para confirmar seu agendamento de *${serviceName}* no dia *${dateStr}* às *${timeStr}* na ${salon.name}.\n\nQualquer dúvida, estamos à disposição!\nAtenciosamente.`;
     
-    window.open(`https://wa.me/55${client.whatsapp}?text=${encodeURIComponent(msg)}`, '_blank');
+    window.open(`https://wa.me/55${client.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const handleUpdateStatus = async (id: string, status: AppointmentStatus) => {
@@ -85,6 +119,67 @@ export const Schedule: React.FC = () => {
       await db.deleteAppointment(id);
       await loadData();
     }
+  };
+
+  // --- Create New Appointment Logic ---
+  const openApptModal = () => {
+      const todayStr = format(selectedDate, 'yyyy-MM-dd');
+      setApptFormData({
+          clientName: '',
+          clientPhone: '',
+          serviceId: '',
+          date: todayStr,
+          time: '09:00'
+      });
+      setIsApptModalOpen(true);
+  };
+
+  const handleSaveNewAppointment = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!salon || !apptFormData.serviceId) {
+          alert("Selecione um serviço.");
+          return;
+      }
+
+      try {
+          // 1. Get Service Details
+          const service = services.find(s => s.id === apptFormData.serviceId);
+          if (!service) throw new Error("Serviço não encontrado");
+
+          // 2. Create/Get Client
+          const newClient = await db.createClient({
+              id: crypto.randomUUID(),
+              salon_id: salon.id,
+              name: apptFormData.clientName,
+              whatsapp: apptFormData.clientPhone,
+              created_at: new Date().toISOString()
+          });
+
+          // 3. Create Appointment
+          const start = new Date(`${apptFormData.date}T${apptFormData.time}`);
+          const end = addMinutes(start, service.duration_min);
+
+          const newAppt = await db.createAppointment({
+              id: crypto.randomUUID(),
+              salon_id: salon.id,
+              service_id: service.id,
+              client_id: newClient.id,
+              start_time: start.toISOString(),
+              end_time: end.toISOString(),
+              status: AppointmentStatus.CONFIRMED,
+              created_at: new Date().toISOString()
+          });
+
+          // 4. Notify immediately
+          handleNotifyClient(newAppt, newClient);
+
+          // 5. Refresh
+          await loadData();
+          setIsApptModalOpen(false);
+
+      } catch (error) {
+          alert((error as Error).message);
+      }
   };
 
   // --- Reschedule & Block Logic ---
@@ -212,7 +307,7 @@ export const Schedule: React.FC = () => {
              <div className="mb-6 opacity-60">
                 {showHeader && (
                     <h4 className="font-serif font-bold text-gray-400 mb-2 flex items-center gap-2">
-                        {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                        {format(date, "EEEE, dd 'de' MMMM", { locale: pt })}
                         {isToday && <span className="bg-gold-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase">Hoje</span>}
                     </h4>
                 )}
@@ -227,7 +322,7 @@ export const Schedule: React.FC = () => {
           <div className="mb-6">
               {showHeader && (
                 <h4 className={`font-serif font-bold text-lg mb-3 flex items-center gap-2 ${isToday ? 'text-gold-700' : 'text-gray-700'}`}>
-                    {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                    {format(date, "EEEE, dd 'de' MMMM", { locale: pt })}
                     {isToday && <span className="bg-gold-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase">Hoje</span>}
                 </h4>
               )}
@@ -334,7 +429,7 @@ export const Schedule: React.FC = () => {
                     <span className="material-symbols-outlined">chevron_left</span>
                 </button>
                 <h2 className="font-serif font-bold text-gold-900 capitalize">
-                    {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+                    {format(currentMonth, 'MMMM yyyy', { locale: pt })}
                 </h2>
                 <button 
                     onClick={() => handleMonthChange('next')} 
@@ -380,6 +475,13 @@ export const Schedule: React.FC = () => {
           {/* Quick Actions (Desktop/Tablet) */}
           <div className="hidden md:flex flex-col gap-3">
              <button 
+                onClick={openApptModal}
+                className="bg-gold-500 text-white px-4 py-3 rounded-xl font-bold text-sm hover:bg-gold-600 transition-colors flex items-center justify-center gap-2 shadow-md"
+             >
+                <span className="material-symbols-outlined text-sm">add</span>
+                Novo Agendamento
+             </button>
+             <button 
                 onClick={openBlockModal}
                 className="bg-gray-800 text-white px-4 py-3 rounded-xl font-bold text-sm hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-md"
              >
@@ -415,10 +517,16 @@ export const Schedule: React.FC = () => {
                 </div>
 
                 {/* Mobile Action Button */}
-                <button onClick={openBlockModal} className="md:hidden w-full sm:w-auto text-gray-700 p-2 bg-white rounded-lg shadow-sm border border-gray-200 flex justify-center items-center gap-2 font-bold text-xs">
-                    <span className="material-symbols-outlined text-sm">block</span>
-                    Bloquear
-                </button>
+                <div className="flex gap-2 w-full sm:w-auto md:hidden">
+                    <button onClick={openApptModal} className="flex-1 text-white bg-gold-500 rounded-lg shadow-sm border border-gold-600 flex justify-center items-center gap-2 font-bold text-xs p-2">
+                        <span className="material-symbols-outlined text-sm">add</span>
+                        Novo
+                    </button>
+                    <button onClick={openBlockModal} className="flex-1 text-gray-700 bg-white rounded-lg shadow-sm border border-gray-200 flex justify-center items-center gap-2 font-bold text-xs p-2">
+                        <span className="material-symbols-outlined text-sm">block</span>
+                        Bloquear
+                    </button>
+                </div>
             </div>
 
             {/* List Content based on ViewMode */}
@@ -432,7 +540,7 @@ export const Schedule: React.FC = () => {
                     <div className="space-y-4">
                         <div className="text-center mb-6">
                             <span className="px-3 py-1 bg-gold-50 text-gold-800 rounded-full text-xs font-bold uppercase tracking-widest border border-gold-100">
-                                Semana de {format(startOfWeek(selectedDate), "dd 'de' MMM", { locale: ptBR })} a {format(endOfWeek(selectedDate), "dd 'de' MMM", { locale: ptBR })}
+                                Semana de {format(startOfWeek(selectedDate), "dd 'de' MMM", { locale: pt })} a {format(endOfWeek(selectedDate), "dd 'de' MMM", { locale: pt })}
                             </span>
                         </div>
                         {eachDayOfInterval({ start: startOfWeek(selectedDate), end: endOfWeek(selectedDate) })
@@ -451,7 +559,7 @@ export const Schedule: React.FC = () => {
                     <div className="space-y-4">
                          <div className="text-center mb-6">
                             <span className="px-3 py-1 bg-gold-50 text-gold-800 rounded-full text-xs font-bold uppercase tracking-widest border border-gold-100">
-                                {format(selectedDate, "MMMM 'de' yyyy", { locale: ptBR })}
+                                {format(selectedDate, "MMMM 'de' yyyy", { locale: pt })}
                             </span>
                         </div>
                         {eachDayOfInterval({ start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) })
@@ -466,7 +574,7 @@ export const Schedule: React.FC = () => {
             </div>
        </div>
 
-       {/* Modals */}
+       {/* Block Modal */}
        {isBlockModalOpen && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
               <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
@@ -495,6 +603,87 @@ export const Schedule: React.FC = () => {
                       <div className="flex gap-2 pt-2">
                           <button type="button" onClick={() => setIsBlockModalOpen(false)} className="flex-1 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg text-sm">Cancelar</button>
                           <button type="submit" className="flex-1 py-2 bg-gray-800 text-white font-bold rounded-lg hover:bg-black text-sm">Bloquear</button>
+                      </div>
+                  </form>
+              </div>
+           </div>
+       )}
+
+       {/* Create Appointment Modal */}
+       {isApptModalOpen && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
+                  <h3 className="font-serif text-xl font-bold mb-4 text-gold-900">Novo Agendamento</h3>
+                  <form onSubmit={handleSaveNewAppointment} className="space-y-4">
+                      
+                      {/* Service Selection */}
+                      <div>
+                          <label className="text-xs font-bold text-gray-500 uppercase">Serviço</label>
+                          <select 
+                              required 
+                              value={apptFormData.serviceId} 
+                              onChange={e => setApptFormData({...apptFormData, serviceId: e.target.value})} 
+                              className="w-full border rounded-lg p-2 mt-1 text-sm bg-white"
+                          >
+                              <option value="">Selecione...</option>
+                              {services.map(s => (
+                                  <option key={s.id} value={s.id}>{s.name} - R$ {s.price}</option>
+                              ))}
+                          </select>
+                      </div>
+
+                      {/* Client Info */}
+                      <div>
+                          <label className="text-xs font-bold text-gray-500 uppercase">Nome do Cliente</label>
+                          <input 
+                              type="text" 
+                              required 
+                              value={apptFormData.clientName} 
+                              onChange={e => setApptFormData({...apptFormData, clientName: e.target.value})} 
+                              className="w-full border rounded-lg p-2 mt-1 text-sm" 
+                              placeholder="Nome completo"
+                          />
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-gray-500 uppercase">WhatsApp</label>
+                          <input 
+                              type="tel" 
+                              required 
+                              value={apptFormData.clientPhone} 
+                              onChange={e => setApptFormData({...apptFormData, clientPhone: e.target.value})} 
+                              className="w-full border rounded-lg p-2 mt-1 text-sm" 
+                              placeholder="(00) 00000-0000"
+                              maxLength={15}
+                          />
+                      </div>
+
+                      {/* Date & Time */}
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="text-xs font-bold text-gray-500 uppercase">Data</label>
+                              <input 
+                                  type="date" 
+                                  required 
+                                  value={apptFormData.date} 
+                                  onChange={e => setApptFormData({...apptFormData, date: e.target.value})} 
+                                  className="w-full border rounded-lg p-2 mt-1 text-sm" 
+                              />
+                          </div>
+                          <div>
+                              <label className="text-xs font-bold text-gray-500 uppercase">Horário</label>
+                              <input 
+                                  type="time" 
+                                  required 
+                                  value={apptFormData.time} 
+                                  onChange={e => setApptFormData({...apptFormData, time: e.target.value})} 
+                                  className="w-full border rounded-lg p-2 mt-1 text-sm" 
+                              />
+                          </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-4">
+                          <button type="button" onClick={() => setIsApptModalOpen(false)} className="flex-1 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg text-sm">Cancelar</button>
+                          <button type="submit" className="flex-1 py-2 bg-gold-500 text-white font-bold rounded-lg hover:bg-gold-600 text-sm">Salvar</button>
                       </div>
                   </form>
               </div>

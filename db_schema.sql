@@ -1,256 +1,259 @@
 
--- LIMPEZA TOTAL (Necessária para corrigir conflitos de esquema antigos)
+-- ==========================================
+-- 1. LIMPEZA E CONFIGURAÇÃO INICIAL
+-- ==========================================
+
+-- Habilita extensão para UUIDs
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Limpa tabelas existentes para recriação limpa (Cuidado em produção!)
 DROP VIEW IF EXISTS public_busy_times;
+DROP TABLE IF EXISTS product_orders CASCADE;
 DROP TABLE IF EXISTS appointments CASCADE;
 DROP TABLE IF EXISTS blocked_times CASCADE;
-DROP TABLE IF EXISTS product_orders CASCADE;
 DROP TABLE IF EXISTS services CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS clients CASCADE;
 DROP TABLE IF EXISTS salons CASCADE;
+DROP TABLE IF EXISTS global_settings CASCADE;
 
--- 1. ATIVAR EXTENSÕES
-create extension if not exists "uuid-ossp";
+-- ==========================================
+-- 2. CRIAÇÃO DAS TABELAS
+-- ==========================================
 
--- 2. TABELAS
+-- Configurações Globais (Apenas Super Admin edita, Público lê)
+CREATE TABLE global_settings (
+  id text PRIMARY KEY DEFAULT 'global',
+  default_logo_url text,
+  updated_at timestamptz DEFAULT now()
+);
 
--- Salões
-create table if not exists salons (
-  id uuid primary key default uuid_generate_v4(),
-  name text not null,
-  slug text unique not null,
+-- Salões (Multi-tenancy Core)
+CREATE TABLE salons (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  owner_id uuid REFERENCES auth.users(id), -- Vincula ao usuário do Supabase Auth
+  name text NOT NULL,
+  slug text UNIQUE NOT NULL,
   logo_url text,
   phone text,
   address text,
-  theme_color text,
-  opening_hours jsonb default '[]'::jsonb,
-  subscription_status text default 'TRIAL' check (subscription_status in ('TRIAL', 'ACTIVE', 'EXPIRED', 'BLOCKED')),
-  owner_email text,
-  created_at timestamptz default now()
+  theme_color text DEFAULT '#C5A059',
+  opening_hours jsonb DEFAULT '[]'::jsonb,
+  
+  -- Campos de Assinatura
+  subscription_status text DEFAULT 'TRIAL' CHECK (subscription_status IN ('TRIAL', 'ACTIVE', 'EXPIRED', 'BLOCKED', 'CANCELLED')),
+  subscription_plan text DEFAULT 'FREE',
+  subscription_end_date timestamptz,
+  is_lifetime_free boolean DEFAULT false,
+  
+  owner_email text, -- Mantido para compatibilidade visual, mas owner_id é usado para segurança
+  created_at timestamptz DEFAULT now()
 );
 
 -- Serviços
-create table if not exists services (
-  id uuid primary key default uuid_generate_v4(),
-  salon_id uuid references salons(id) on delete cascade,
-  name text not null,
+CREATE TABLE services (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id uuid REFERENCES salons(id) ON DELETE CASCADE NOT NULL,
+  name text NOT NULL,
   description text,
-  price numeric(10,2) not null,
-  duration_min integer not null,
+  price numeric(10,2) NOT NULL DEFAULT 0,
+  duration_min integer NOT NULL DEFAULT 30,
   image_url text,
-  created_at timestamptz default now()
+  created_at timestamptz DEFAULT now()
 );
 
 -- Produtos
-create table if not exists products (
-  id uuid primary key default uuid_generate_v4(),
-  salon_id uuid references salons(id) on delete cascade,
-  name text not null,
+CREATE TABLE products (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id uuid REFERENCES salons(id) ON DELETE CASCADE NOT NULL,
+  name text NOT NULL,
   description text,
-  price numeric(10,2) not null,
-  stock integer default 0,
+  price numeric(10,2) NOT NULL DEFAULT 0,
+  stock integer DEFAULT 0,
   image_url text,
-  created_at timestamptz default now()
+  created_at timestamptz DEFAULT now()
 );
 
 -- Clientes
-create table if not exists clients (
-  id uuid primary key default uuid_generate_v4(),
-  salon_id uuid references salons(id) on delete cascade,
-  name text not null,
-  whatsapp text not null,
-  created_at timestamptz default now(),
-  unique(salon_id, whatsapp)
+CREATE TABLE clients (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id uuid REFERENCES salons(id) ON DELETE CASCADE NOT NULL,
+  name text NOT NULL,
+  whatsapp text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(salon_id, whatsapp) -- Evita duplicidade de cliente no mesmo salão
 );
 
 -- Agendamentos
-create table if not exists appointments (
-  id uuid primary key default uuid_generate_v4(),
-  salon_id uuid references salons(id) on delete cascade,
-  service_id uuid references services(id) on delete set null,
-  client_id uuid references clients(id) on delete cascade,
-  start_time timestamptz not null,
-  end_time timestamptz not null,
-  status text check (status in ('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED')),
-  created_at timestamptz default now()
+CREATE TABLE appointments (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id uuid REFERENCES salons(id) ON DELETE CASCADE NOT NULL,
+  service_id uuid REFERENCES services(id) ON DELETE SET NULL,
+  client_id uuid REFERENCES clients(id) ON DELETE CASCADE,
+  start_time timestamptz NOT NULL,
+  end_time timestamptz NOT NULL,
+  status text DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED')),
+  created_at timestamptz DEFAULT now()
 );
 
--- Pedidos de Produtos (Interesse)
-create table if not exists product_orders (
-  id uuid primary key default uuid_generate_v4(),
-  salon_id uuid references salons(id) on delete cascade,
-  product_id uuid references products(id) on delete set null,
-  client_name text not null,
-  client_phone text not null,
-  status text check (status in ('PENDING', 'COMPLETED', 'CANCELLED')),
-  created_at timestamptz default now()
+-- Pedidos de Produtos
+CREATE TABLE product_orders (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id uuid REFERENCES salons(id) ON DELETE CASCADE NOT NULL,
+  product_id uuid REFERENCES products(id) ON DELETE SET NULL,
+  client_name text NOT NULL,
+  client_phone text NOT NULL,
+  status text DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED', 'CANCELLED')),
+  created_at timestamptz DEFAULT now()
 );
 
--- Bloqueios
-create table if not exists blocked_times (
-  id uuid primary key default uuid_generate_v4(),
-  salon_id uuid references salons(id) on delete cascade,
-  start_time timestamptz not null,
-  end_time timestamptz not null,
+-- Bloqueios de Agenda
+CREATE TABLE blocked_times (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id uuid REFERENCES salons(id) ON DELETE CASCADE NOT NULL,
+  start_time timestamptz NOT NULL,
+  end_time timestamptz NOT NULL,
   reason text,
-  created_at timestamptz default now()
+  created_at timestamptz DEFAULT now()
 );
 
--- 3. VIEW PÚBLICA (CRUCIAL PARA O AGENDAMENTO)
-create or replace view public_busy_times as
-select 
+-- ==========================================
+-- 3. VIEW PÚBLICA (Para cálculo de horários livres)
+-- ==========================================
+-- Permite que o frontend consulte horários ocupados sem expor dados sensíveis do cliente
+CREATE OR REPLACE VIEW public_busy_times AS
+SELECT 
   salon_id, 
   start_time, 
   end_time, 
   'appointment' as type 
-from appointments 
-where status != 'CANCELLED'
-union all
-select 
+FROM appointments 
+WHERE status != 'CANCELLED'
+UNION ALL
+SELECT 
   salon_id, 
   start_time, 
   end_time, 
   'blocked' as type 
-from blocked_times;
+FROM blocked_times;
 
--- 4. STORAGE
-insert into storage.buckets (id, name, public)
-values ('salon-media', 'salon-media', true)
-on conflict (id) do nothing;
+-- ==========================================
+-- 4. ROW LEVEL SECURITY (RLS)
+-- ==========================================
 
--- 5. SEGURANÇA (RLS)
+-- Habilitar RLS em todas as tabelas
+ALTER TABLE global_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE salons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blocked_times ENABLE ROW LEVEL SECURITY;
 
--- Habilitar RLS
-alter table salons enable row level security;
-alter table services enable row level security;
-alter table products enable row level security;
-alter table clients enable row level security;
-alter table appointments enable row level security;
-alter table blocked_times enable row level security;
-alter table product_orders enable row level security;
+-- --- Helper para Super Admin ---
+-- Substitua pelo email real do Super Admin
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS boolean AS $$
+BEGIN
+  RETURN (SELECT email FROM auth.users WHERE id = auth.uid()) = 'joaocarlostuc75@gmail.com';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Políticas de Leitura
-drop policy if exists "Salons are public" on salons;
-create policy "Salons are public" on salons for select using (true);
+-- --- Helper para verificar dono do salão ---
+CREATE OR REPLACE FUNCTION is_salon_owner(row_salon_id uuid)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM salons 
+    WHERE id = row_salon_id AND owner_id = auth.uid()
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
-drop policy if exists "Services are public" on services;
-create policy "Services are public" on services for select using (true);
+-- 4.1 POLÍTICAS: GLOBAL SETTINGS
+CREATE POLICY "Public Read Settings" ON global_settings FOR SELECT USING (true);
+CREATE POLICY "Super Admin Manage Settings" ON global_settings FOR ALL USING (is_super_admin());
 
-drop policy if exists "Products are public" on products;
-create policy "Products are public" on products for select using (true);
+-- 4.2 POLÍTICAS: SALONS
+CREATE POLICY "Public Read Salons" ON salons FOR SELECT USING (true);
+CREATE POLICY "Owner Update Salon" ON salons FOR UPDATE USING (owner_id = auth.uid());
+CREATE POLICY "Owner Insert Salon" ON salons FOR INSERT WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "Super Admin Manage Salons" ON salons FOR ALL USING (is_super_admin());
 
-drop policy if exists "Busy times are public" on blocked_times;
-create policy "Busy times are public" on blocked_times for select using (true); 
+-- 4.3 POLÍTICAS: SERVICES & PRODUCTS (Público vê, Dono gerencia)
+-- Services
+CREATE POLICY "Public Read Services" ON services FOR SELECT USING (true);
+CREATE POLICY "Owner Manage Services" ON services FOR ALL USING (is_salon_owner(salon_id));
+-- Products
+CREATE POLICY "Public Read Products" ON products FOR SELECT USING (true);
+CREATE POLICY "Owner Manage Products" ON products FOR ALL USING (is_salon_owner(salon_id));
 
-drop policy if exists "Public view appointments slots" on appointments;
-create policy "Public view appointments slots" on appointments for select using (true);
+-- 4.4 POLÍTICAS: CLIENTS (Público cria, Dono gerencia)
+-- Importante: Insert público permitido para fluxo de agendamento sem login
+CREATE POLICY "Public Insert Clients" ON clients FOR INSERT WITH CHECK (true); 
+CREATE POLICY "Owner Manage Clients" ON clients FOR ALL USING (is_salon_owner(salon_id));
 
--- Políticas de Escrita (Público)
-drop policy if exists "Public create clients" on clients;
-create policy "Public create clients" on clients for insert with check (true);
+-- 4.5 POLÍTICAS: APPOINTMENTS (Público cria, Dono gerencia)
+CREATE POLICY "Public Insert Appointments" ON appointments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Owner Manage Appointments" ON appointments FOR ALL USING (is_salon_owner(salon_id));
 
-drop policy if exists "Public create appointments" on appointments;
-create policy "Public create appointments" on appointments for insert with check (true);
+-- 4.6 POLÍTICAS: ORDERS (Público cria, Dono gerencia)
+CREATE POLICY "Public Insert Orders" ON product_orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "Owner Manage Orders" ON product_orders FOR ALL USING (is_salon_owner(salon_id));
 
-drop policy if exists "Public create orders" on product_orders;
-create policy "Public create orders" on product_orders for insert with check (true);
+-- 4.7 POLÍTICAS: BLOCKED TIMES (Público vê via View, Dono gerencia)
+-- Nota: A leitura direta da tabela bloqueada para público não é estritamente necessária se usarem a VIEW, 
+-- mas útil para lógica frontend. Vamos liberar leitura.
+CREATE POLICY "Public Read Blocks" ON blocked_times FOR SELECT USING (true);
+CREATE POLICY "Owner Manage Blocks" ON blocked_times FOR ALL USING (is_salon_owner(salon_id));
 
--- Políticas de ADMIN
-drop policy if exists "Admin Full Access Salons" on salons;
-create policy "Admin Full Access Salons" on salons for all using (auth.role() = 'authenticated');
+-- ==========================================
+-- 5. STORAGE (BUCKETS)
+-- ==========================================
 
-drop policy if exists "Admin Full Access Services" on services;
-create policy "Admin Full Access Services" on services for all using (auth.role() = 'authenticated');
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('salon-media', 'salon-media', true)
+ON CONFLICT (id) DO NOTHING;
 
-drop policy if exists "Admin Full Access Products" on products;
-create policy "Admin Full Access Products" on products for all using (auth.role() = 'authenticated');
+-- Política de Storage: Qualquer um vê, apenas autenticado faz upload
+CREATE POLICY "Public Access Media" ON storage.objects FOR SELECT USING (bucket_id = 'salon-media');
+CREATE POLICY "Auth Upload Media" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'salon-media' AND auth.role() = 'authenticated');
+CREATE POLICY "Owner Delete Media" ON storage.objects FOR DELETE USING (bucket_id = 'salon-media' AND auth.uid() = owner);
 
-drop policy if exists "Admin Full Access Clients" on clients;
-create policy "Admin Full Access Clients" on clients for all using (auth.role() = 'authenticated');
+-- ==========================================
+-- 6. ÍNDICES DE PERFORMANCE
+-- ==========================================
 
-drop policy if exists "Admin Full Access Appointments" on appointments;
-create policy "Admin Full Access Appointments" on appointments for all using (auth.role() = 'authenticated');
+CREATE INDEX idx_salons_owner ON salons(owner_id);
+CREATE INDEX idx_services_salon ON services(salon_id);
+CREATE INDEX idx_products_salon ON products(salon_id);
+CREATE INDEX idx_clients_salon_phone ON clients(salon_id, whatsapp);
+CREATE INDEX idx_appointments_salon_date ON appointments(salon_id, start_time);
+CREATE INDEX idx_appointments_client ON appointments(client_id);
+CREATE INDEX idx_orders_salon ON product_orders(salon_id);
 
-drop policy if exists "Admin Full Access Blocks" on blocked_times;
-create policy "Admin Full Access Blocks" on blocked_times for all using (auth.role() = 'authenticated');
+-- ==========================================
+-- 7. DADOS INICIAIS (SEED)
+-- ==========================================
 
-drop policy if exists "Admin Full Access Orders" on product_orders;
-create policy "Admin Full Access Orders" on product_orders for all using (auth.role() = 'authenticated');
+-- Configuração Global Padrão
+INSERT INTO global_settings (id, default_logo_url) 
+VALUES ('global', 'https://via.placeholder.com/300?text=J.C+System')
+ON CONFLICT (id) DO NOTHING;
 
--- Políticas de Storage
-drop policy if exists "Public Access Storage" on storage.objects;
-create policy "Public Access Storage" on storage.objects for select using ( bucket_id = 'salon-media' );
-
-drop policy if exists "Admin Insert Storage" on storage.objects;
-create policy "Admin Insert Storage" on storage.objects for insert with check ( bucket_id = 'salon-media' and auth.role() = 'authenticated' );
-
-drop policy if exists "Admin Update Storage" on storage.objects;
-create policy "Admin Update Storage" on storage.objects for update using ( bucket_id = 'salon-media' and auth.role() = 'authenticated' );
-
-drop policy if exists "Admin Delete Storage" on storage.objects;
-create policy "Admin Delete Storage" on storage.objects for delete using ( bucket_id = 'salon-media' and auth.role() = 'authenticated' );
-
--- 6. SEED DATA
-
--- Insere o Salão (Agora a tabela estará limpa e correta)
+-- Salão Demo (Opcional - útil para teste imediato)
+-- Nota: owner_id deve ser um UUID válido de um usuário criado em auth.users se quiser testar login real.
+-- Aqui usamos um UUID genérico, o login falhará a menos que esse usuário exista no Auth.
 INSERT INTO salons (id, name, slug, phone, address, logo_url, opening_hours, subscription_status, owner_email)
 VALUES (
   'e2c0a884-6d9e-4861-a9d5-17154238805f', 
-  'Cílios de Luxo', 
+  'Cílios de Luxo (Demo)', 
   'cilios-de-luxo', 
   '11999999999', 
-  'Rua F nº 143, Santa Mônica',
+  'Rua Demo, 123',
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ',
-  '[
-    {"dayOfWeek": 0, "isOpen": false, "slots": []},
-    {"dayOfWeek": 1, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]},
-    {"dayOfWeek": 2, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]},
-    {"dayOfWeek": 3, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]},
-    {"dayOfWeek": 4, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]},
-    {"dayOfWeek": 5, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]},
-    {"dayOfWeek": 6, "isOpen": true, "slots": [{"start": "09:00", "end": "14:00"}]}
-  ]'::jsonb,
+  '[{"dayOfWeek": 0, "isOpen": false, "slots": []}, {"dayOfWeek": 1, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]}, {"dayOfWeek": 2, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]}, {"dayOfWeek": 3, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]}, {"dayOfWeek": 4, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]}, {"dayOfWeek": 5, "isOpen": true, "slots": [{"start": "09:00", "end": "12:00"}, {"start": "13:00", "end": "18:00"}]}, {"dayOfWeek": 6, "isOpen": true, "slots": [{"start": "09:00", "end": "14:00"}]}]'::jsonb,
   'TRIAL',
-  'admin@cilios.com'
+  'joaocarlostuc75@gmail.com'
 ) ON CONFLICT (id) DO NOTHING;
-
--- Insere Serviços Iniciais
-INSERT INTO services (salon_id, name, description, price, duration_min, image_url)
-SELECT 
-  'e2c0a884-6d9e-4861-a9d5-17154238805f', 
-  'Volume Brasileiro', 
-  'Técnica queridinha do momento. Fios em Y para volume e leveza.', 
-  130.00, 
-  105, 
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
-WHERE NOT EXISTS (SELECT 1 FROM services WHERE salon_id = 'e2c0a884-6d9e-4861-a9d5-17154238805f' AND name = 'Volume Brasileiro');
-
-INSERT INTO services (salon_id, name, description, price, duration_min, image_url)
-SELECT 
-  'e2c0a884-6d9e-4861-a9d5-17154238805f', 
-  'Volume Russo', 
-  'Olhar dramático e sofisticado com máxima densidade.', 
-  150.00, 
-  120, 
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
-WHERE NOT EXISTS (SELECT 1 FROM services WHERE salon_id = 'e2c0a884-6d9e-4861-a9d5-17154238805f' AND name = 'Volume Russo');
-
-INSERT INTO services (salon_id, name, description, price, duration_min, image_url)
-SELECT 
-  'e2c0a884-6d9e-4861-a9d5-17154238805f', 
-  'Cílios Fio a Fio', 
-  'Clássico para quem busca naturalidade e definição.', 
-  110.00, 
-  90, 
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
-WHERE NOT EXISTS (SELECT 1 FROM services WHERE salon_id = 'e2c0a884-6d9e-4861-a9d5-17154238805f' AND name = 'Cílios Fio a Fio');
-
-INSERT INTO services (salon_id, name, description, price, duration_min, image_url)
-SELECT 
-  'e2c0a884-6d9e-4861-a9d5-17154238805f', 
-  'Manutenção', 
-  'Manutenção de cílios para manter o volume e formato por mais tempo.', 
-  80.00, 
-  60, 
-  'https://lh3.googleusercontent.com/aida-public/AB6AXuDyZu1A9B65hwLOA7DqdEmC2YsZaegwppquE_7UOU2hNkKa8h9EgPPxfmzh1cRWYJze9ad8I1GEgg5LswAjm4MUyJiFIz3FjroXYuA_HsJ99PIzxDrCDNgOX_qnsynkNAyRF1zPHTYj4iMd6k8dnrhiLK4TEpsTLIOk0sAku4K_nfNFLCOVBqEcNF_1e-Rl561XB5NwalEa5_d2pcoRiqbhIytoUmtK2OuK1fZAB4AQLk3YKJZyEq5t0oYd_4mzvUw4CipgSEH_eQ'
-WHERE NOT EXISTS (SELECT 1 FROM services WHERE salon_id = 'e2c0a884-6d9e-4861-a9d5-17154238805f' AND name = 'Manutenção');

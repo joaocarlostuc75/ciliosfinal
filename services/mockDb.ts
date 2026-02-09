@@ -1,11 +1,10 @@
 
-import { Appointment, AppointmentStatus, Client, Product, Salon, Service, BlockedTime, DaySchedule, Order, OrderStatus, SubscriptionStatus } from '../types';
+import { Appointment, AppointmentStatus, Client, Product, Salon, Service, BlockedTime, DaySchedule, Order, OrderStatus, SubscriptionStatus, SubscriptionPlan, GlobalSettings } from '../types';
 import { supabase } from './supabaseClient';
-import { differenceInDays } from 'date-fns';
 
-// Initial Mock Data
-// EMPTY FOR FRESH INSTALL
+// Constants
 const MOCK_SALON_ID = 'e2c0a884-6d9e-4861-a9d5-17154238805f';
+const SUPER_ADMIN_EMAIL = 'joaocarlostuc75@gmail.com';
 
 const defaultSchedule: DaySchedule[] = [
   { dayOfWeek: 0, isOpen: false, slots: [] },
@@ -16,20 +15,6 @@ const defaultSchedule: DaySchedule[] = [
   { dayOfWeek: 5, isOpen: true, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '18:00' }] },
   { dayOfWeek: 6, isOpen: true, slots: [{ start: '09:00', end: '14:00' }] },
 ];
-
-// Template for NEW accounts (SignUp)
-const templateSalon: Salon = {
-  id: MOCK_SALON_ID,
-  name: 'Novo Estabelecimento',
-  slug: 'novo-estabelecimento',
-  logo_url: 'https://via.placeholder.com/150?text=Logo',
-  phone: '',
-  address: '',
-  opening_hours: defaultSchedule,
-  subscription_status: SubscriptionStatus.TRIAL,
-  created_at: new Date().toISOString(),
-  owner_email: ''
-};
 
 const getStorage = <T>(key: string, initial: T | null): T | null => {
   try {
@@ -51,71 +36,97 @@ const setStorage = <T>(key: string, value: T) => {
 
 class ApiService {
   private supabase = supabase;
+  private currentSalonId: string | null = null;
+
+  constructor() {
+      // Initialize Global Settings if not exists
+      if (!getStorage('global_settings', null)) {
+          setStorage('global_settings', {
+              id: 'global',
+              default_logo_url: '',
+              updated_at: new Date().toISOString()
+          });
+      }
+      
+      // Attempt to restore session salon
+      const storedId = localStorage.getItem('active_salon_id');
+      if (storedId) this.currentSalonId = storedId;
+      else this.currentSalonId = MOCK_SALON_ID; // Default to Demo
+  }
 
   // --- Auth & Security ---
   
   async login(email: string, pass: string): Promise<{ success: boolean; message?: string; role?: 'ADMIN' | 'SUPER_ADMIN' }> {
     // Super Admin Credentials
-    if (email === 'jc@sistemas.com' && pass === 'admin123') {
+    if (email === SUPER_ADMIN_EMAIL && pass === 'admin123') {
         localStorage.setItem('auth_role', 'SUPER_ADMIN');
         return { success: true, role: 'SUPER_ADMIN' };
     }
 
-    // Normal Admin Login
+    // Normal Admin Login (Mock Logic for multi-tenant simulation)
+    const salons = await this.getAllSalons();
+    const userSalon = salons.find(s => s.owner_email === email);
+
+    if (userSalon) {
+         // Simple password check (In real app, hash check)
+         // For mock purposes, any password works if email matches, or specific mock pass
+         localStorage.setItem('auth_role', 'ADMIN');
+         this.setCurrentSalon(userSalon.id);
+         
+         if (!this.checkSubscriptionValidity(userSalon)) {
+             if (userSalon.subscription_status === SubscriptionStatus.BLOCKED) {
+                 return { success: false, message: 'Conta bloqueada. Contate o suporte.' };
+             }
+             if (userSalon.subscription_status === SubscriptionStatus.EXPIRED) {
+                 return { success: true, role: 'ADMIN', message: 'Assinatura expirada. Renove para liberar agendamentos.' };
+             }
+         }
+         return { success: true, role: 'ADMIN' };
+    }
+
+    // Supabase Fallback
     if (this.supabase) {
       const { error } = await (this.supabase.auth as any).signInWithPassword({ email, password: pass });
-      if (error) {
-        return { success: false, message: error.message };
-      }
+      if (error) return { success: false, message: error.message };
       localStorage.setItem('auth_role', 'ADMIN');
-      
-      const salon = await this.getSalon();
-      if (salon && !this.checkSubscriptionValidity(salon)) {
-          if (salon.subscription_status !== SubscriptionStatus.ACTIVE) {
-               return { success: false, message: 'Período de teste expirado. Regularize sua assinatura.' };
-          }
-      }
       return { success: true, role: 'ADMIN' };
-    }
-    
-    // Mock Logic
-    const salon = await this.getSalon();
-    // Allow login if salon exists and email matches (simple mock check) or if just created
-    if (salon && salon.owner_email === email) {
-         localStorage.setItem('auth_role', 'ADMIN');
-         return { success: true, role: 'ADMIN' };
-    } else if (!salon) {
-        return { success: false, message: 'Nenhum estabelecimento cadastrado. Crie uma conta.' };
     }
 
     return { success: false, message: 'Credenciais inválidas.' };
   }
 
   async signUp(email: string, pass: string): Promise<{ success: boolean; message?: string }> {
-    // Logic for new account - starts with 10 days trial
-    if (this.supabase) {
-      const { data, error } = await (this.supabase.auth as any).signUp({ email, password: pass });
-      if (error) return { success: false, message: error.message };
-      if (data?.session) {
-          localStorage.setItem('auth_role', 'ADMIN');
-          return { success: true, message: 'Conta criada e logada com sucesso!' };
-      }
+    // Check if email exists
+    const salons = await this.getAllSalons();
+    if (salons.some(s => s.owner_email === email)) {
+        return { success: false, message: 'Email já cadastrado.' };
     }
-    
-    // Mock fallback: Create the FIRST salon in local storage
-    const newSalon = {
-        ...templateSalon,
-        id: crypto.randomUUID(), // New ID
-        owner_email: email,
+
+    // Create New Salon (Empty State)
+    const newSalonId = crypto.randomUUID();
+    const newSalon: Salon = {
+        id: newSalonId,
+        name: 'Novo Estabelecimento',
+        slug: `novo-${newSalonId.slice(0, 8)}`,
+        logo_url: '', // Empty to force default logo usage
+        phone: '',
+        address: '',
+        opening_hours: defaultSchedule,
+        subscription_status: SubscriptionStatus.TRIAL,
+        subscription_plan: 'FREE',
         created_at: new Date().toISOString(),
-        subscription_status: SubscriptionStatus.TRIAL
+        owner_email: email,
+        is_lifetime_free: false
     };
+
+    // Save to "DB"
+    setStorage('salons_list', [...salons, newSalon]);
     
-    // Overwrite existing mock data to simulate fresh tenant
-    setStorage('salon', newSalon);
+    // Auto Login
+    this.setCurrentSalon(newSalonId);
     localStorage.setItem('auth_role', 'ADMIN');
-    
-    return { success: true, message: 'Conta criada! Período de teste de 10 dias iniciado.' };
+
+    return { success: true, message: 'Conta criada! Configure seu estabelecimento.' };
   }
 
   async changeEmail(newEmail: string): Promise<void> {
@@ -127,26 +138,19 @@ class ApiService {
   }
 
   async changePassword(newPass: string): Promise<void> {
-      if (this.supabase) {
-          const { error } = await (this.supabase.auth as any).updateUser({ password: newPass });
-          if (error) throw error;
-      }
+      // In mock DB, we don't really store passwords, so we just acknowledge
+      // In a real app, this would update the auth provider
+      console.log("Password updated to", newPass);
   }
 
   async resetPassword(email: string): Promise<{ success: boolean; message?: string }> {
-    if (this.supabase) {
-      const { error } = await (this.supabase.auth as any).resetPasswordForEmail(email);
-      if (error) return { success: false, message: error.message };
-      return { success: true, message: 'Email de recuperação enviado.' };
-    }
     return { success: true, message: 'Email de recuperação enviado (Simulado).' };
   }
 
   async logout(): Promise<void> {
     localStorage.removeItem('auth_role');
-    if (this.supabase) {
-      await (this.supabase.auth as any).signOut();
-    }
+    localStorage.removeItem('active_salon_id');
+    this.currentSalonId = null; // Reset to null or default
   }
 
   isAuthenticated(): boolean {
@@ -157,17 +161,56 @@ class ApiService {
       return localStorage.getItem('auth_role') === 'SUPER_ADMIN';
   }
 
+  setCurrentSalon(id: string) {
+      this.currentSalonId = id;
+      localStorage.setItem('active_salon_id', id);
+  }
+
+  // --- Global Settings (Super Admin) ---
+  
+  async getGlobalSettings(): Promise<GlobalSettings> {
+      return getStorage<GlobalSettings>('global_settings', {
+          id: 'global',
+          default_logo_url: '',
+          updated_at: new Date().toISOString()
+      })!;
+  }
+
+  async saveGlobalSettings(settings: GlobalSettings): Promise<void> {
+      setStorage('global_settings', settings);
+  }
+
   // --- Subscription Logic ---
 
   checkSubscriptionValidity(salon: Salon | null): boolean {
       if (!salon) return false;
-      if (salon.subscription_status === SubscriptionStatus.ACTIVE) return true;
+      
+      // Admin overrides
+      if (salon.is_lifetime_free) return true;
       if (salon.subscription_status === SubscriptionStatus.BLOCKED) return false;
-      if (salon.subscription_status === SubscriptionStatus.EXPIRED) return false;
+      if (salon.subscription_status === SubscriptionStatus.CANCELLED) return false;
 
-      // Check Trial
+      // Check Expiration Date
+      if (salon.subscription_end_date) {
+          const endDate = new Date(salon.subscription_end_date);
+          const now = new Date();
+          if (endDate < now) {
+              // Auto-expire if date passed
+              if (salon.subscription_status !== SubscriptionStatus.EXPIRED) {
+                  salon.subscription_status = SubscriptionStatus.EXPIRED;
+                  this.updateSalon(salon); // Persist change
+              }
+              return false;
+          }
+      }
+
+      // Check Trial (10 days)
       if (salon.subscription_status === SubscriptionStatus.TRIAL) {
-          const daysUsed = differenceInDays(new Date(), new Date(salon.created_at));
+          const now = new Date();
+          const created = new Date(salon.created_at);
+          const diffTime = now.getTime() - created.getTime();
+          const daysUsed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
           if (daysUsed > 10) {
               salon.subscription_status = SubscriptionStatus.EXPIRED;
               this.updateSalon(salon);
@@ -175,202 +218,127 @@ class ApiService {
           }
           return true;
       }
-      return false;
+
+      return salon.subscription_status === SubscriptionStatus.ACTIVE;
   }
 
   // --- Super Admin Capabilities ---
 
   async getAllSalons(): Promise<Salon[]> {
-      const current = await this.getSalon();
-      if (!current) return [];
-      return [current];
+      // In this Mock, we store all salons in a 'salons_list' array AND the default MOCK_SALON separately to avoid breaking legacy code
+      // We merge them here
+      const list = getStorage<Salon[]>('salons_list', []);
+      const defaultSalon = getStorage<Salon | null>('salon', null);
+      
+      // Ensure default salon is in the list for Super Admin view
+      if (defaultSalon && !list.find(s => s.id === defaultSalon.id)) {
+          list.push(defaultSalon);
+      }
+      return list;
   }
 
-  async toggleSalonStatus(salonId: string, status: SubscriptionStatus): Promise<void> {
-      const salon = await this.getSalon();
-      if (salon && salon.id === salonId) {
-          salon.subscription_status = status;
-          await this.updateSalon(salon);
+  async adminUpdateSalon(salon: Salon): Promise<void> {
+      // Update in the list
+      const list = await this.getAllSalons();
+      const newList = list.map(s => s.id === salon.id ? salon : s);
+      setStorage('salons_list', newList);
+
+      // If it's the default salon, update that storage too
+      const defaultSalon = getStorage<Salon | null>('salon', null);
+      if (defaultSalon && defaultSalon.id === salon.id) {
+          setStorage('salon', salon);
       }
   }
 
   // --- Storage ---
   async uploadImage(file: File): Promise<string> {
-    if (this.supabase) {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      const { error: uploadError } = await this.supabase.storage
-        .from('salon-media')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw uploadError;
-      }
-
-      const { data } = this.supabase.storage.from('salon-media').getPublicUrl(filePath);
-      return data.publicUrl;
-    }
-    return URL.createObjectURL(file);
+    // Simulating upload
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+    });
   }
 
-  // --- Salon ---
+  // --- Salon Data Access ---
+  
   async getSalon(): Promise<Salon | null> {
-    if (this.supabase) {
-      try {
-          const { data, error } = await this.supabase.from('salons').select('*').limit(1).maybeSingle();
-          if (error) throw error;
-          if (data) return data;
-      } catch (e) {
-          console.warn("Supabase Fetch Error (getSalon):", e);
+      const all = await this.getAllSalons();
+      // If we have a specific context ID, return that salon
+      if (this.currentSalonId) {
+          const found = all.find(s => s.id === this.currentSalonId);
+          if (found) return found;
       }
-    }
-    // Return null if no salon is configured (Fresh install state)
-    return getStorage<Salon | null>('salon', null);
+      // Fallback: Return the default/first one
+      return getStorage<Salon | null>('salon', null);
   }
 
   async updateSalon(salon: Salon): Promise<Salon> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase
-                .from('salons')
-                .update({ 
-                    name: salon.name, 
-                    phone: salon.phone, 
-                    address: salon.address, 
-                    logo_url: salon.logo_url, 
-                    opening_hours: salon.opening_hours,
-                    subscription_status: salon.subscription_status,
-                    owner_email: salon.owner_email
-                })
-                .eq('id', salon.id)
-                .select()
-                .single();
-            if (!error && data) return data;
-            if (error) throw error;
-        } catch(e) { console.error(e); }
-    }
-    setStorage('salon', salon);
-    return salon;
+      await this.adminUpdateSalon(salon);
+      return salon;
   }
 
-  // --- Services ---
+  // --- Services (Filtered by Salon ID) ---
+  
   async getServices(): Promise<Service[]> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('services').select('*');
-            if (!error && data) return data;
-        } catch(e) { console.warn(e); }
-    }
-    // Empty default for fresh install
-    return getStorage<Service[]>('services', []);
+    const all = getStorage<Service[]>('services', []);
+    if (!this.currentSalonId) return [];
+    return all.filter(s => s.salon_id === this.currentSalonId);
   }
 
   async addService(service: Service): Promise<Service> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('services').insert(service).select().single();
-            if (!error && data) return data;
-        } catch(e) { console.error(e); }
-    }
-    const services = await this.getServices();
-    const newServices = [...services, service];
-    setStorage('services', newServices);
+    const all = getStorage<Service[]>('services', []);
+    // Ensure salon_id is set to current context
+    service.salon_id = this.currentSalonId || MOCK_SALON_ID;
+    setStorage('services', [...all, service]);
     return service;
   }
 
   async updateService(updated: Service): Promise<Service> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('services').update(updated).eq('id', updated.id).select().single();
-            if (!error && data) return data;
-        } catch(e) { console.error(e); }
-    }
-    const services = await this.getServices();
-    const newServices = services.map(s => s.id === updated.id ? updated : s);
-    setStorage('services', newServices);
+    const all = getStorage<Service[]>('services', []);
+    const newAll = all.map(s => s.id === updated.id ? updated : s);
+    setStorage('services', newAll);
     return updated;
   }
 
   async deleteService(id: string): Promise<void> {
-    if (this.supabase) {
-        try { await this.supabase.from('services').delete().eq('id', id); return; } 
-        catch(e) { console.error(e); }
-    }
-    const services = await this.getServices();
-    setStorage('services', services.filter(s => s.id !== id));
+    const all = getStorage<Service[]>('services', []);
+    setStorage('services', all.filter(s => s.id !== id));
   }
 
-  // --- Clients ---
+  // --- Clients (Filtered) ---
+  
   async getClients(): Promise<Client[]> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('clients').select('*');
-            if (error) throw error;
-            if (data) return data;
-        } catch(e) { console.warn(e); }
-    }
-    return getStorage<Client[]>('clients', []);
+    const all = getStorage<Client[]>('clients', []);
+    if (!this.currentSalonId) return [];
+    return all.filter(c => c.salon_id === this.currentSalonId);
   }
 
   async createClient(client: Client): Promise<Client> {
-    const salon = await this.getSalon();
-    if (!this.checkSubscriptionValidity(salon)) {
-        throw new Error("O estabelecimento está temporariamente indisponível. Entre em contato diretamente.");
-    }
-
-    if (this.supabase) {
-        try {
-            const { data: existing } = await this.supabase.from('clients').select('*').eq('whatsapp', client.whatsapp).maybeSingle();
-            if (existing) return existing;
-
-            const { data, error } = await this.supabase.from('clients').insert(client).select().single();
-            if (!error && data) return data;
-        } catch(e) { console.error(e); }
-    }
-
-    const clients = await this.getClients();
-    const existing = clients.find(c => c.whatsapp === client.whatsapp);
-    if (existing) return existing;
+    const all = getStorage<Client[]>('clients', []);
     
-    const newClients = [...clients, client];
-    setStorage('clients', newClients);
+    // Check duplication within this salon
+    const existing = all.find(c => c.salon_id === client.salon_id && c.whatsapp === client.whatsapp);
+    if (existing) return existing;
+
+    setStorage('clients', [...all, client]);
     return client;
   }
 
   async updateClient(updated: Client): Promise<Client> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('clients').update(updated).eq('id', updated.id).select().single();
-            if (!error && data) return data;
-        } catch(e) { console.error(e); }
-    }
-    const clients = await this.getClients();
-    const newClients = clients.map(c => c.id === updated.id ? updated : c);
-    setStorage('clients', newClients);
+    const all = getStorage<Client[]>('clients', []);
+    setStorage('clients', all.map(c => c.id === updated.id ? updated : c));
     return updated;
   }
 
   async deleteClient(id: string): Promise<void> {
-    if (this.supabase) {
-        try { await this.supabase.from('clients').delete().eq('id', id); return; }
-        catch(e) { console.error(e); }
-    }
-    const clients = await this.getClients();
-    setStorage('clients', clients.filter(c => c.id !== id));
+    const all = getStorage<Client[]>('clients', []);
+    setStorage('clients', all.filter(c => c.id !== id));
   }
 
   async getClientHistory(clientId: string): Promise<Appointment[]> {
-     if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('appointments').select('*').eq('client_id', clientId);
-            if (!error && data) return data;
-        } catch(e) { console.warn(e); }
-     }
-    const appointments = await this.getAppointments();
-    return appointments.filter(a => a.client_id === clientId);
+    const allAppts = await this.getAppointments();
+    return allAppts.filter(a => a.client_id === clientId);
   }
 
   async getClientAppointmentsByPhone(phone: string): Promise<Appointment[]> {
@@ -387,68 +355,48 @@ class ApiService {
     return orders.filter(o => o.client_phone.replace(/\D/g, '') === cleanPhone);
   }
 
-  // --- Appointments & Blocking ---
+  // --- Appointments (Filtered) ---
+  
   async getAppointments(): Promise<Appointment[]> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('appointments').select('*');
-            if (!error && data) return data;
-        } catch(e) { console.warn(e); }
-    }
-    return getStorage<Appointment[]>('appointments', []);
+    const all = getStorage<Appointment[]>('appointments', []);
+    if (!this.currentSalonId) return [];
+    return all.filter(a => a.salon_id === this.currentSalonId);
   }
 
   async getBlockedTimes(): Promise<BlockedTime[]> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('blocked_times').select('*');
-            if (!error && data) return data;
-        } catch(e) { console.warn(e); }
-    }
-    return getStorage<BlockedTime[]>('blocked_times', []);
+    const all = getStorage<BlockedTime[]>('blocked_times', []);
+    if (!this.currentSalonId) return [];
+    return all.filter(b => b.salon_id === this.currentSalonId);
   }
 
   async getBusyTimes(salonId: string, startDate: string): Promise<{start: string, end: string}[]> {
-     if (this.supabase) {
-         try {
-            const { data, error } = await this.supabase
-                .from('public_busy_times')
-                .select('start_time, end_time')
-                .eq('salon_id', salonId)
-                .gte('start_time', startDate);
-            
-            if (!error && data) return data.map((d: any) => ({ start: d.start_time, end: d.end_time }));
-         } catch(e) { console.warn("Using fallback busy times", e); }
-     }
+     // Get ALL appointments/blocks for the specific salon ID provided
+     const allAppts = getStorage<Appointment[]>('appointments', []);
+     const allBlocks = getStorage<BlockedTime[]>('blocked_times', []);
 
-     const appts = await this.getAppointments();
-     const blocks = await this.getBlockedTimes();
+     const salonAppts = allAppts.filter(a => a.salon_id === salonId && a.status !== AppointmentStatus.CANCELLED);
+     const salonBlocks = allBlocks.filter(b => b.salon_id === salonId);
+
      const all = [
-         ...appts.filter(a => a.status !== AppointmentStatus.CANCELLED).map(a => ({ start: a.start_time, end: a.end_time })),
-         ...blocks.map(b => ({ start: b.start_time, end: b.end_time }))
+         ...salonAppts.map(a => ({ start: a.start_time, end: a.end_time })),
+         ...salonBlocks.map(b => ({ start: b.start_time, end: b.end_time }))
      ];
      return all.filter(a => new Date(a.start) >= new Date(startDate));
   }
 
   async addBlockedTime(block: BlockedTime): Promise<void> {
-    if (this.supabase) {
-        try { await this.supabase.from('blocked_times').insert(block); return; }
-        catch(e) { console.error(e); }
-    }
-    const blocks = await this.getBlockedTimes();
-    setStorage('blocked_times', [...blocks, block]);
+    const all = getStorage<BlockedTime[]>('blocked_times', []);
+    block.salon_id = this.currentSalonId || MOCK_SALON_ID;
+    setStorage('blocked_times', [...all, block]);
   }
 
   async deleteBlockedTime(id: string): Promise<void> {
-     if (this.supabase) {
-        try { await this.supabase.from('blocked_times').delete().eq('id', id); return; }
-        catch(e) { console.error(e); }
-     }
-    const blocks = await this.getBlockedTimes();
-    setStorage('blocked_times', blocks.filter(b => b.id !== id));
+    const all = getStorage<BlockedTime[]>('blocked_times', []);
+    setStorage('blocked_times', all.filter(b => b.id !== id));
   }
 
   async createAppointment(appt: Appointment): Promise<Appointment> {
+    // Re-check busy times
     const busy = await this.getBusyTimes(appt.salon_id, appt.start_time.split('T')[0]);
     const newStart = new Date(appt.start_time).getTime();
     const newEnd = new Date(appt.end_time).getTime();
@@ -460,135 +408,75 @@ class ApiService {
     });
 
     if (hasConflict) {
-      throw new Error('Horário indisponível devido a conflito de agenda ou bloqueio.');
+      throw new Error('Horário indisponível.');
     }
 
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('appointments').insert(appt).select().single();
-            if (!error && data) return data;
-            if (error) throw error;
-        } catch(e) { console.error(e); }
-    }
-
-    const appointments = await this.getAppointments();
-    setStorage('appointments', [...appointments, appt]);
+    const all = getStorage<Appointment[]>('appointments', []);
+    setStorage('appointments', [...all, appt]);
     return appt;
   }
 
   async updateAppointment(updated: Appointment): Promise<void> {
-    if (this.supabase) {
-        try { await this.supabase.from('appointments').update(updated).eq('id', updated.id); return; }
-        catch(e) { console.error(e); }
-    }
-     const appointments = await this.getAppointments();
-     const newAppts = appointments.filter(a => a.id !== updated.id);
-     setStorage('appointments', [...newAppts, updated]);
+    const all = getStorage<Appointment[]>('appointments', []);
+    setStorage('appointments', all.map(a => a.id === updated.id ? updated : a));
   }
 
   async updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<void> {
-     if (this.supabase) {
-        try { await this.supabase.from('appointments').update({ status }).eq('id', id); return; }
-        catch(e) { console.error(e); }
-     }
-    const appointments = await this.getAppointments();
-    const newAppointments = appointments.map(a => a.id === id ? { ...a, status } : a);
-    setStorage('appointments', newAppointments);
+    const all = getStorage<Appointment[]>('appointments', []);
+    setStorage('appointments', all.map(a => a.id === id ? { ...a, status } : a));
   }
 
   async deleteAppointment(id: string): Promise<void> {
-     if (this.supabase) {
-        try { await this.supabase.from('appointments').delete().eq('id', id); return; }
-        catch(e) { console.error(e); }
-     }
-    const appointments = await this.getAppointments();
-    setStorage('appointments', appointments.filter(a => a.id !== id));
+    const all = getStorage<Appointment[]>('appointments', []);
+    setStorage('appointments', all.filter(a => a.id !== id));
   }
 
-  // --- Products ---
+  // --- Products (Filtered) ---
+  
   async getProducts(): Promise<Product[]> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('products').select('*');
-            if (!error && data) return data;
-        } catch(e) { console.warn(e); }
-    }
-    return getStorage<Product[]>('products', []);
+    const all = getStorage<Product[]>('products', []);
+    if (!this.currentSalonId) return [];
+    return all.filter(p => p.salon_id === this.currentSalonId);
   }
 
   async addProduct(product: Product): Promise<void> {
-     if (this.supabase) {
-        try { await this.supabase.from('products').insert(product); return; }
-        catch(e) { console.error(e); }
-     }
-    const products = await this.getProducts();
-    setStorage('products', [...products, product]);
+    const all = getStorage<Product[]>('products', []);
+    product.salon_id = this.currentSalonId || MOCK_SALON_ID;
+    setStorage('products', [...all, product]);
   }
 
   async updateProduct(updated: Product): Promise<Product> {
-     if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('products').update(updated).eq('id', updated.id).select().single();
-            if (!error && data) return data;
-        } catch(e) { console.error(e); }
-     }
-    const products = await this.getProducts();
-    const newProducts = products.map(p => p.id === updated.id ? updated : p);
-    setStorage('products', newProducts);
+    const all = getStorage<Product[]>('products', []);
+    setStorage('products', all.map(p => p.id === updated.id ? updated : p));
     return updated;
   }
   
   async deleteProduct(id: string): Promise<void> {
-     if (this.supabase) {
-        try { await this.supabase.from('products').delete().eq('id', id); return; }
-        catch(e) { console.error(e); }
-     }
-    const products = await this.getProducts();
-    setStorage('products', products.filter(p => p.id !== id));
+    const all = getStorage<Product[]>('products', []);
+    setStorage('products', all.filter(p => p.id !== id));
   }
 
-  // --- Product Orders (Orders) ---
+  // --- Orders (Filtered) ---
+  
   async getOrders(): Promise<Order[]> {
-    if (this.supabase) {
-        try {
-            const { data, error } = await this.supabase.from('product_orders').select('*');
-            if (!error && data) return data;
-        } catch(e) { console.warn(e); }
-    }
-    return getStorage<Order[]>('product_orders', []);
+    const all = getStorage<Order[]>('product_orders', []);
+    if (!this.currentSalonId) return [];
+    return all.filter(o => o.salon_id === this.currentSalonId);
   }
 
   async createOrder(order: Order): Promise<void> {
-     const salon = await this.getSalon();
-     if (!this.checkSubscriptionValidity(salon)) {
-         throw new Error("O estabelecimento está temporariamente indisponível para novos pedidos.");
-     }
-
-     if (this.supabase) {
-        try { await this.supabase.from('product_orders').insert(order); return; }
-        catch(e) { console.error(e); }
-     }
-    const orders = await this.getOrders();
-    setStorage('product_orders', [...orders, order]);
+    const all = getStorage<Order[]>('product_orders', []);
+    setStorage('product_orders', [...all, order]);
   }
 
   async updateOrderStatus(id: string, status: OrderStatus): Promise<void> {
-     if (this.supabase) {
-        try { await this.supabase.from('product_orders').update({ status }).eq('id', id); return; }
-        catch(e) { console.error(e); }
-     }
-    const orders = await this.getOrders();
-    const newOrders = orders.map(o => o.id === id ? { ...o, status } : o);
-    setStorage('product_orders', newOrders);
+    const all = getStorage<Order[]>('product_orders', []);
+    setStorage('product_orders', all.map(o => o.id === id ? { ...o, status } : o));
   }
 
   async deleteOrder(id: string): Promise<void> {
-     if (this.supabase) {
-        try { await this.supabase.from('product_orders').delete().eq('id', id); return; }
-        catch(e) { console.error(e); }
-     }
-    const orders = await this.getOrders();
-    setStorage('product_orders', orders.filter(o => o.id !== id));
+    const all = getStorage<Order[]>('product_orders', []);
+    setStorage('product_orders', all.filter(o => o.id !== id));
   }
 }
 

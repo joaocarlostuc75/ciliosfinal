@@ -8,11 +8,14 @@ export const Splash: React.FC = () => {
   const navigate = useNavigate();
   const [salon, setSalon] = useState<Salon | null>(null);
   const [loading, setLoading] = useState(true);
+  const [defaultLogo, setDefaultLogo] = useState('');
 
   useEffect(() => {
     const load = async () => {
       try {
         const data = await db.getSalon();
+        const settings = await db.getGlobalSettings();
+        setDefaultLogo(settings.default_logo_url);
         setSalon(data);
       } catch (e) {
         console.error("Failed to load salon:", e);
@@ -31,6 +34,9 @@ export const Splash: React.FC = () => {
       );
   }
 
+  // Display Logo Logic: Salon Logo > Default System Logo > Fallback Icon
+  const displayLogo = salon?.logo_url || defaultLogo;
+
   if (!salon) {
       return (
           <div className="min-h-screen bg-luxury-light flex flex-col items-center justify-center p-8 text-center animate-fade-in relative">
@@ -42,8 +48,12 @@ export const Splash: React.FC = () => {
                 <span className="material-symbols-outlined text-xl">lock</span>
              </button>
 
-             <div className="w-24 h-24 bg-gold-100 rounded-full flex items-center justify-center mb-6 text-gold-600">
-                 <span className="material-symbols-outlined text-5xl">diamond</span>
+             <div className="w-24 h-24 bg-gold-100 rounded-full flex items-center justify-center mb-6 text-gold-600 overflow-hidden border-2 border-gold-200">
+                 {defaultLogo ? (
+                     <img src={defaultLogo} className="w-full h-full object-cover" alt="System" />
+                 ) : (
+                     <span className="material-symbols-outlined text-5xl">diamond</span>
+                 )}
              </div>
              <h1 className="font-serif text-3xl font-bold text-gold-900 mb-2">J.C SISTEMAS</h1>
              <p className="text-gray-500 mb-8 max-w-md">
@@ -80,13 +90,19 @@ export const Splash: React.FC = () => {
         {/* Artistic Frame for Image */}
         <div className="relative mb-12">
             <div className="absolute inset-0 bg-gold-gradient rounded-[3rem] rotate-6 opacity-60 blur-sm transform scale-105" />
-            <div className="w-64 h-80 relative rounded-[3rem] overflow-hidden border-4 border-gold-300 shadow-2xl">
-                <img 
-                    src={salon.logo_url} 
-                    alt="Salon Ambience" 
-                    className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/20" />
+            <div className="w-64 h-80 relative rounded-[3rem] overflow-hidden border-4 border-gold-300 shadow-2xl bg-white flex items-center justify-center">
+                {displayLogo ? (
+                    <img 
+                        src={displayLogo} 
+                        alt="Salon Ambience" 
+                        className="w-full h-full object-cover"
+                    />
+                ) : (
+                    <div className="text-gold-200 flex flex-col items-center">
+                        <span className="material-symbols-outlined text-6xl">storefront</span>
+                    </div>
+                )}
+                <div className="absolute inset-0 bg-black/10" />
             </div>
         </div>
 

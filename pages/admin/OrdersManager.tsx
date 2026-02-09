@@ -1,8 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
 import { Order, OrderStatus, Product } from '../../types';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 interface EnrichedOrder extends Order {
     product_image?: string;

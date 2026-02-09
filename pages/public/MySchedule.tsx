@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
 import { Appointment, Service, Order, Product } from '../../types';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { pt } from 'date-fns/locale';
 
 type HistoryItem = 
   | ({ type: 'appointment' } & Appointment) 
@@ -183,7 +184,7 @@ export const MySchedule: React.FC = () => {
                                           <div className="flex flex-col gap-0.5">
                                               <div className="flex items-center gap-1 text-gray-500 text-xs">
                                                   <span className="material-symbols-outlined text-[12px]">calendar_today</span>
-                                                  {format(new Date(date), "dd 'de' MMMM", { locale: ptBR })}
+                                                  {format(new Date(date), "dd 'de' MMMM", { locale: pt })}
                                               </div>
                                               {isAppt && (
                                                   <div className="flex items-center gap-1 text-gray-500 text-xs">
