@@ -7,6 +7,7 @@ export const SuperSettings: React.FC = () => {
     const [settings, setSettings] = useState<GlobalSettings | null>(null);
     const [appName, setAppName] = useState('');
     const [broadcast, setBroadcast] = useState('');
+    const [adminPhone, setAdminPhone] = useState('');
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
 
@@ -19,6 +20,15 @@ export const SuperSettings: React.FC = () => {
         setSettings(s);
         setAppName(s.app_name || 'J.C Sistemas');
         setBroadcast(s.broadcast_message || '');
+        setAdminPhone(s.super_admin_phone || '');
+    };
+
+    const formatPhone = (value: string) => {
+        return value
+          .replace(/\D/g, "")
+          .replace(/^(\d{2})(\d)/g, "($1) $2")
+          .replace(/(\d)(\d{4})$/, "$1-$2")
+          .slice(0, 15);
     };
 
     const handleSave = async (e: React.FormEvent) => {
@@ -29,6 +39,7 @@ export const SuperSettings: React.FC = () => {
                 ...settings,
                 app_name: appName,
                 broadcast_message: broadcast,
+                super_admin_phone: adminPhone,
                 updated_at: new Date().toISOString()
             });
             setMsg('Configurações salvas! Recarregue a página para ver mudanças globais.');
@@ -68,6 +79,32 @@ export const SuperSettings: React.FC = () => {
                                      placeholder="Ex: MinhaMarca Manager"
                                  />
                                  <p className="text-xs text-gray-400 mt-1">Isso altera o título do navegador e rodapés.</p>
+                             </div>
+                         </div>
+                    </div>
+
+                    <div className="border-t border-gray-100 my-6"></div>
+
+                    {/* Communication */}
+                    <div>
+                         <h4 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                             <span className="material-symbols-outlined text-gold-500">support_agent</span>
+                             Canais de Comunicação
+                         </h4>
+                         <div className="grid gap-4">
+                             <div>
+                                 <label className="text-xs font-bold text-gray-500 uppercase">WhatsApp do Super Admin</label>
+                                 <div className="relative">
+                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">perm_phone_msg</span>
+                                    <input 
+                                        className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 outline-none focus:border-gold-500 mt-1"
+                                        value={adminPhone}
+                                        onChange={e => setAdminPhone(formatPhone(e.target.value))}
+                                        placeholder="(00) 00000-0000"
+                                        maxLength={15}
+                                    />
+                                 </div>
+                                 <p className="text-xs text-gray-400 mt-1">Para recebimento de notificações sobre novos assinantes, solicitações de suporte e outros.</p>
                              </div>
                          </div>
                     </div>

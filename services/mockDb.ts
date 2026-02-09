@@ -187,6 +187,7 @@ class ApiService {
               default_logo_url: '',
               app_name: 'J.C Sistemas',
               broadcast_message: '',
+              super_admin_phone: '',
               updated_at: new Date().toISOString()
           });
       }
@@ -375,6 +376,8 @@ class ApiService {
           id: 'global',
           default_logo_url: '',
           app_name: 'J.C Sistemas',
+          broadcast_message: '',
+          super_admin_phone: '',
           updated_at: new Date().toISOString()
       })!;
   }

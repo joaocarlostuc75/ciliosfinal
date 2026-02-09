@@ -70,6 +70,7 @@ export interface GlobalSettings {
   default_logo_url: string;
   app_name?: string; // White Label Name
   broadcast_message?: string; // Global System Notification
+  super_admin_phone?: string; // Contact for support/notifications
   updated_at: string;
 }
 

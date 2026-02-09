@@ -28,6 +28,7 @@ CREATE TABLE global_settings (
   default_logo_url text,
   app_name text DEFAULT 'J.C Sistemas',
   broadcast_message text,
+  super_admin_phone text, -- Novo campo para contato/notificações
   updated_at timestamptz DEFAULT now()
 );
 
