@@ -3,8 +3,13 @@ import { Appointment, AppointmentStatus, Client, Product, Salon, Service, Blocke
 import { supabase } from './supabaseClient';
 import { addDays } from 'date-fns';
 
-// Constants
-const MOCK_SALON_ID = 'e2c0a884-6d9e-4861-a9d5-17154238805f';
+// --- CONSTANTES DE AMBIENTE (IDS FIXOS) ---
+export const BARBER_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+export const ESTETICA_ID = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22';
+export const SALAO_GERAL_ID = 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c33';
+
+// O Demo Principal (Beauty Power) agora usa o ID de Estética
+const MOCK_SALON_ID = ESTETICA_ID; 
 const TEST_SALON_ID = 'test-salon-id-123456';
 const SUPER_ADMIN_EMAIL = 'joaocarlostuc75@gmail.com';
 
@@ -18,6 +23,7 @@ const defaultSchedule: DaySchedule[] = [
   { dayOfWeek: 6, isOpen: true, slots: [{ start: '09:00', end: '14:00' }] },
 ];
 
+// 1. ESTÉTICA (BEAUTY POWER)
 const DEMO_SALON: Salon = {
     id: MOCK_SALON_ID,
     name: 'Beauty Power',
@@ -36,78 +42,47 @@ const DEMO_SALON: Salon = {
     last_login: new Date().toISOString()
 };
 
-const DEMO_SERVICES: Service[] = [
-    {
-        id: 'srv-1',
-        salon_id: MOCK_SALON_ID,
-        name: 'Volume Russo',
-        description: 'Técnica avançada para um olhar marcante e volumoso.',
-        price: 250.00,
-        duration_min: 120,
-        image_url: 'https://images.unsplash.com/photo-1587776536545-927974a72748?auto=format&fit=crop&q=80&w=500'
-    },
-    {
-        id: 'srv-2',
-        salon_id: MOCK_SALON_ID,
-        name: 'Lash Lifting',
-        description: 'Curvatura natural e nutrição para seus cílios.',
-        price: 180.00,
-        duration_min: 60,
-        image_url: 'https://images.unsplash.com/photo-1512413914633-b5043f4041ea?auto=format&fit=crop&q=80&w=500'
-    },
-    {
-        id: 'srv-3',
-        salon_id: MOCK_SALON_ID,
-        name: 'Brow Lamination',
-        description: 'Sobrancelhas alinhadas e preenchidas com efeito natural.',
-        price: 150.00,
-        duration_min: 45,
-        image_url: 'https://images.unsplash.com/photo-1616683693504-3ea7e9ad6fec?auto=format&fit=crop&q=80&w=500'
-    },
-    {
-        id: 'srv-4',
-        salon_id: MOCK_SALON_ID,
-        name: 'Hydra Gloss Lips',
-        description: 'Hidratação profunda e revitalização da cor dos lábios.',
-        price: 200.00,
-        duration_min: 40,
-        image_url: 'https://images.unsplash.com/photo-1560049444-1845eb67a393?auto=format&fit=crop&q=80&w=500'
-    }
-];
+// 2. BARBEARIA (MACHO ALPHA)
+const BARBER_SALON: Salon = {
+    id: BARBER_ID,
+    name: 'Macho Alpha Barbershop',
+    slug: 'demo-barber',
+    logo_url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&q=80&w=300',
+    phone: '(11) 99999-0001',
+    address: 'Rua Augusta, 500 - Centro',
+    theme_color: '#1A1612', // Dark theme
+    opening_hours: defaultSchedule,
+    subscription_status: SubscriptionStatus.ACTIVE,
+    subscription_plan: 'Plano Gold VIP',
+    subscription_end_date: addDays(new Date(), 365).toISOString(),
+    created_at: addDays(new Date(), -30).toISOString(),
+    owner_email: 'admin@machoalpha.com',
+    is_lifetime_free: false,
+    last_login: new Date().toISOString()
+};
 
-const DEMO_PRODUCTS: Product[] = [
-    {
-        id: 'prod-1',
-        salon_id: MOCK_SALON_ID,
-        name: 'Sérum de Crescimento',
-        description: 'Estimula o crescimento natural dos fios em 30 dias.',
-        price: 89.90,
-        stock: 15,
-        image_url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=500'
-    },
-    {
-        id: 'prod-2',
-        salon_id: MOCK_SALON_ID,
-        name: 'Espuma de Limpeza Lash',
-        description: 'Higienização segura para extensões de cílios.',
-        price: 45.00,
-        stock: 30,
-        image_url: 'https://images.unsplash.com/photo-1556228720-1957be83f360?auto=format&fit=crop&q=80&w=500'
-    },
-    {
-        id: 'prod-3',
-        salon_id: MOCK_SALON_ID,
-        name: 'Kit Home Care Premium',
-        description: 'Tudo o que você precisa para manter seu procedimento em casa.',
-        price: 120.00,
-        stock: 5,
-        image_url: 'https://images.unsplash.com/photo-1616943063809-7707e99732f9?auto=format&fit=crop&q=80&w=500'
-    }
-];
+// 3. SALÃO GERAL (STUDIO BELLEZA)
+const GENERAL_SALON: Salon = {
+    id: SALAO_GERAL_ID,
+    name: 'Studio Belleza',
+    slug: 'demo-salao',
+    logo_url: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=300',
+    phone: '(11) 99999-0003',
+    address: 'Av. Faria Lima, 2000',
+    theme_color: '#E91E63', // Pinkish theme
+    opening_hours: defaultSchedule,
+    subscription_status: SubscriptionStatus.ACTIVE,
+    subscription_plan: 'Plano Silver',
+    subscription_end_date: addDays(new Date(), 30).toISOString(),
+    created_at: addDays(new Date(), -15).toISOString(),
+    owner_email: 'admin@studiobelleza.com',
+    is_lifetime_free: false,
+    last_login: new Date().toISOString()
+};
 
 const TEST_SALON: Salon = {
     id: TEST_SALON_ID,
-    name: 'Salão Modelo',
+    name: 'Salão Modelo (Teste)',
     slug: 'salao-modelo',
     logo_url: '',
     phone: '(11) 98888-8888',
@@ -123,42 +98,108 @@ const TEST_SALON: Salon = {
     last_login: new Date().toISOString()
 };
 
+// --- SERVICES SEEDS ---
+
+const DEMO_SERVICES: Service[] = [
+    {
+        id: 'srv-1', salon_id: MOCK_SALON_ID, name: 'Volume Russo',
+        description: 'Técnica avançada para um olhar marcante e volumoso.',
+        price: 250.00, duration_min: 120,
+        image_url: 'https://images.unsplash.com/photo-1587776536545-927974a72748?auto=format&fit=crop&q=80&w=500'
+    },
+    {
+        id: 'srv-2', salon_id: MOCK_SALON_ID, name: 'Lash Lifting',
+        description: 'Curvatura natural e nutrição para seus cílios.',
+        price: 180.00, duration_min: 60,
+        image_url: 'https://images.unsplash.com/photo-1512413914633-b5043f4041ea?auto=format&fit=crop&q=80&w=500'
+    },
+    {
+        id: 'srv-3', salon_id: MOCK_SALON_ID, name: 'Brow Lamination',
+        description: 'Sobrancelhas alinhadas e preenchidas com efeito natural.',
+        price: 150.00, duration_min: 45,
+        image_url: 'https://images.unsplash.com/photo-1616683693504-3ea7e9ad6fec?auto=format&fit=crop&q=80&w=500'
+    },
+    {
+        id: 'srv-4', salon_id: MOCK_SALON_ID, name: 'Hydra Gloss Lips',
+        description: 'Hidratação profunda e revitalização da cor dos lábios.',
+        price: 200.00, duration_min: 40,
+        image_url: 'https://images.unsplash.com/photo-1560049444-1845eb67a393?auto=format&fit=crop&q=80&w=500'
+    }
+];
+
+const BARBER_SERVICES: Service[] = [
+    {
+        id: 'barber-1', salon_id: BARBER_ID, name: 'Corte Degradê',
+        description: 'Acabamento perfeito na navalha.',
+        price: 45.00, duration_min: 40,
+        image_url: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=300'
+    },
+    {
+        id: 'barber-2', salon_id: BARBER_ID, name: 'Barba Terapia',
+        description: 'Toalha quente e massagem.',
+        price: 35.00, duration_min: 30,
+        image_url: 'https://images.unsplash.com/photo-1503951914875-452162b7f304?auto=format&fit=crop&w=300'
+    },
+    {
+        id: 'barber-3', salon_id: BARBER_ID, name: 'Selagem Masculina',
+        description: 'Alinhamento dos fios.',
+        price: 80.00, duration_min: 60,
+        image_url: 'https://images.unsplash.com/photo-1599351431202-6e0c06e73734?auto=format&fit=crop&w=300'
+    }
+];
+
+const GENERAL_SERVICES: Service[] = [
+    {
+        id: 'gen-1', salon_id: SALAO_GERAL_ID, name: 'Pé e Mão',
+        description: 'Cutilagem e esmaltação.',
+        price: 50.00, duration_min: 60,
+        image_url: 'https://images.unsplash.com/photo-1632345031435-8727f6897d53?auto=format&fit=crop&w=300'
+    },
+    {
+        id: 'gen-2', salon_id: SALAO_GERAL_ID, name: 'Tintura Completa',
+        description: 'Coloração profissional.',
+        price: 150.00, duration_min: 90,
+        image_url: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?auto=format&fit=crop&w=300'
+    }
+];
+
+const DEMO_PRODUCTS: Product[] = [
+    {
+        id: 'prod-1', salon_id: MOCK_SALON_ID, name: 'Sérum de Crescimento',
+        description: 'Estimula o crescimento natural dos fios em 30 dias.',
+        price: 89.90, stock: 15,
+        image_url: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=500'
+    },
+    {
+        id: 'prod-2', salon_id: MOCK_SALON_ID, name: 'Espuma de Limpeza Lash',
+        description: 'Higienização segura para extensões de cílios.',
+        price: 45.00, stock: 30,
+        image_url: 'https://images.unsplash.com/photo-1556228720-1957be83f360?auto=format&fit=crop&q=80&w=500'
+    },
+    {
+        id: 'prod-3', salon_id: MOCK_SALON_ID, name: 'Kit Home Care Premium',
+        description: 'Tudo o que você precisa para manter seu procedimento em casa.',
+        price: 120.00, stock: 5,
+        image_url: 'https://images.unsplash.com/photo-1616943063809-7707e99732f9?auto=format&fit=crop&q=80&w=500'
+    }
+];
+
 const DEFAULT_PLANS: SystemPlan[] = [
     { 
-        id: '1', 
-        name: 'Plano Bronze', 
-        price: 149, 
-        period: 'monthly', 
-        features: ['1 Usuário', 'Agenda Básica', 'Suporte por Email'], 
-        is_popular: false,
-        is_public: true
+        id: '1', name: 'Plano Bronze', price: 149, period: 'monthly', 
+        features: ['1 Usuário', 'Agenda Básica', 'Suporte por Email'], is_popular: false, is_public: true
     },
     { 
-        id: '2', 
-        name: 'Plano Silver', 
-        price: 289, 
-        period: 'monthly', 
-        features: ['3 Usuários', 'Agenda Avançada', 'Gestão Financeira', 'Suporte Prioritário'], 
-        is_popular: true,
-        is_public: true
+        id: '2', name: 'Plano Silver', price: 289, period: 'monthly', 
+        features: ['3 Usuários', 'Agenda Avançada', 'Gestão Financeira', 'Suporte Prioritário'], is_popular: true, is_public: true
     },
     { 
-        id: '3', 
-        name: 'Plano Gold VIP', 
-        price: 450, 
-        period: 'monthly', 
-        features: ['Ilimitado', 'Todas as funcionalidades', 'Consultoria Mensal', 'Home Care Kit'], 
-        is_popular: false,
-        is_public: true
+        id: '3', name: 'Plano Gold VIP', price: 450, period: 'monthly', 
+        features: ['Ilimitado', 'Todas as funcionalidades', 'Consultoria Mensal', 'Home Care Kit'], is_popular: false, is_public: true
     },
     { 
-        id: '4', 
-        name: 'Plano Parceiro (Secreto)', 
-        price: 99, 
-        period: 'monthly', 
-        features: ['Acesso total com desconto'], 
-        is_popular: false,
-        is_public: false
+        id: '4', name: 'Plano Parceiro (Secreto)', price: 99, period: 'monthly', 
+        features: ['Acesso total com desconto'], is_popular: false, is_public: false
     }
 ];
 
@@ -204,51 +245,59 @@ class ApiService {
       // 3. Initialize Demo Data
       const existingSalons = getStorage<Salon[]>('salons_list', []) || [];
       
-      // Check for Demo Salon
-      let demoIndex = existingSalons.findIndex(s => s.owner_email === SUPER_ADMIN_EMAIL);
       let updatedSalons = [...existingSalons];
       let needsUpdate = false;
 
-      // Always update/reset demo salon to ensure fresh data for new viewers
-      if (demoIndex >= 0) {
-          // Keep existing subscription data but refresh display info
-          updatedSalons[demoIndex] = {
-              ...updatedSalons[demoIndex],
-              name: DEMO_SALON.name,
-              slug: DEMO_SALON.slug,
-              logo_url: DEMO_SALON.logo_url,
-              phone: DEMO_SALON.phone,
-              address: DEMO_SALON.address
-          };
+      // Helper to upsert salon
+      const upsertSalon = (target: Salon) => {
+          const idx = updatedSalons.findIndex(s => s.id === target.id);
+          if (idx >= 0) {
+              // Only update critical display fields if already exists, keeping user data intact
+              updatedSalons[idx] = { 
+                  ...updatedSalons[idx], 
+                  name: target.name, 
+                  logo_url: target.logo_url,
+                  owner_email: target.owner_email 
+              };
+          } else {
+              updatedSalons.push(target);
+          }
           needsUpdate = true;
-      } else {
-          updatedSalons.push(DEMO_SALON);
-          demoIndex = updatedSalons.length - 1;
-          needsUpdate = true;
-      }
-      
-      // Check for Test Salon (The one failing)
-      const hasTest = existingSalons.some(s => s.owner_email === 'admin@teste.com');
-      
-      if (!hasTest) {
-          updatedSalons.push(TEST_SALON);
-          needsUpdate = true;
-      }
+      };
+
+      // Seed all 3 Demos + Test
+      upsertSalon(DEMO_SALON);    // Lash (Estética)
+      upsertSalon(BARBER_SALON);  // Barbearia
+      upsertSalon(GENERAL_SALON); // Salão Geral
+      upsertSalon(TEST_SALON);    // Test User
 
       if (needsUpdate) {
           setStorage('salons_list', updatedSalons);
       }
 
-      // Seed Services and Products for Demo Salon if missing or force update
+      // Seed Services
       const allServices = getStorage<Service[]>('services', []) || [];
-      const demoServicesExist = allServices.some(s => s.salon_id === MOCK_SALON_ID);
-      
-      if (!demoServicesExist) {
-          // Remove old demo services if any (cleanup)
-          const cleanServices = allServices.filter(s => s.salon_id !== MOCK_SALON_ID);
-          setStorage('services', [...cleanServices, ...DEMO_SERVICES]);
+      let updatedServices = [...allServices];
+      let servicesChanged = false;
+
+      const seedServiceList = (list: Service[]) => {
+          list.forEach(svc => {
+              if (!updatedServices.some(s => s.id === svc.id)) {
+                  updatedServices.push(svc);
+                  servicesChanged = true;
+              }
+          });
+      };
+
+      seedServiceList(DEMO_SERVICES);
+      seedServiceList(BARBER_SERVICES);
+      seedServiceList(GENERAL_SERVICES);
+
+      if (servicesChanged) {
+          setStorage('services', updatedServices);
       }
 
+      // Seed Products (Only for Main Demo for now to save space, or easily add others here)
       const allProducts = getStorage<Product[]>('products', []) || [];
       const demoProductsExist = allProducts.some(p => p.salon_id === MOCK_SALON_ID);
       
@@ -257,7 +306,7 @@ class ApiService {
           setStorage('products', [...cleanProducts, ...DEMO_PRODUCTS]);
       }
       
-      // 4. Restore Session or Default to Demo
+      // 4. Restore Session or Default to Demo (Lash)
       const storedId = localStorage.getItem('active_salon_id');
       if (storedId) {
           this.currentSalonId = storedId;
@@ -285,6 +334,9 @@ class ApiService {
          if (email === 'admin@teste.com' && pass !== '123456') {
              return { success: false, message: 'Senha incorreta.' };
          }
+         
+         // Generic password check for demos (accepts anything non-empty or specific simple pass)
+         if (!pass) return { success: false, message: 'Digite a senha.' };
 
          localStorage.setItem('auth_role', 'ADMIN');
          this.setCurrentSalon(userSalon.id);
