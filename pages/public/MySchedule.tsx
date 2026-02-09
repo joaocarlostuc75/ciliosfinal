@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
 import { Appointment, Service, Order, Product } from '../../types';
 import { format } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale';
 
 type HistoryItem = 
   | ({ type: 'appointment' } & Appointment) 

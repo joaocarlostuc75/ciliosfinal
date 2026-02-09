@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
 import { Appointment, Service, Client, BlockedTime, AppointmentStatus, Salon } from '../../types';
@@ -6,7 +7,7 @@ import {
     endOfDay, endOfMonth, eachDayOfInterval, 
     endOfWeek, isSameMonth, addMonths, isBefore
 } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale';
 
 // Helpers for missing date-fns functions
 const startOfMonth = (date: Date) => {

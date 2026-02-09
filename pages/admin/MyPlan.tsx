@@ -1,8 +1,9 @@
+
 import React, { useEffect, useState } from 'react';
 import { db } from '../../services/mockDb';
 import { Salon, SubscriptionStatus, SystemPlan } from '../../types';
 import { differenceInDays, format } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale';
 
 export const MyPlan: React.FC = () => {
   const [salon, setSalon] = useState<Salon | null>(null);

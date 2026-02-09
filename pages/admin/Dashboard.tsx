@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { db } from '../../services/mockDb';
 import { AppointmentStatus, OrderStatus } from '../../types';
@@ -6,7 +7,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { format, eachDayOfInterval, isSameDay, isSameMonth } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale';
 
 export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
