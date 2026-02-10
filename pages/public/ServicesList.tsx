@@ -29,8 +29,8 @@ export const ServicesList: React.FC = () => {
             <span className="material-symbols-outlined">arrow_back_ios</span>
          </button>
          <h1 className="font-serif font-bold text-gold-900 text-lg">{salon?.name || 'Cílios de Luxo'}</h1>
-         <button onClick={() => navigate('/my-schedule')} className="text-gold-700 p-2 hover:bg-gold-50 rounded-full transition-colors" title="Minha Agenda">
-            <span className="material-symbols-outlined">event_note</span>
+         <button onClick={() => navigate('/my-schedule')} className="text-gold-700 p-2 hover:bg-gold-50 rounded-full transition-colors" title="Meu Histórico">
+            <span className="material-symbols-outlined">history</span>
          </button>
       </header>
 

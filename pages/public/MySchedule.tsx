@@ -18,6 +18,7 @@ export const MySchedule: React.FC = () => {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'appointments' | 'orders'>('all');
   
   // Metadata for enrichment
   const [services, setServices] = useState<Service[]>([]);
@@ -95,13 +96,23 @@ export const MySchedule: React.FC = () => {
   const getServiceData = (id: string) => services.find(s => s.id === id);
   const getProductData = (id: string) => products.find(p => p.id === id);
 
+  const filteredItems = items.filter(item => {
+      if (activeTab === 'all') return true;
+      if (activeTab === 'appointments') return item.type === 'appointment';
+      if (activeTab === 'orders') return item.type === 'order';
+      return true;
+  });
+
+  const appointmentsCount = items.filter(i => i.type === 'appointment').length;
+  const ordersCount = items.filter(i => i.type === 'order').length;
+
   return (
     <div className="min-h-screen bg-luxury-light pb-20">
       <nav className="p-4 flex items-center border-b border-gold-200 bg-white/50 backdrop-blur sticky top-0 z-20 shadow-sm">
         <button onClick={() => navigate('/services')} className="p-2 text-gold-700 hover:bg-gold-50 rounded-full transition-colors">
            <span className="material-symbols-outlined">arrow_back_ios</span>
         </button>
-        <span className="font-serif font-bold text-gold-900 ml-2">Minha Agenda</span>
+        <span className="font-serif font-bold text-gold-900 ml-2">Meu Histórico</span>
       </nav>
 
       <main className="max-w-md mx-auto p-6">
@@ -127,78 +138,104 @@ export const MySchedule: React.FC = () => {
                     disabled={loading}
                     className="bg-gold-500 text-white font-bold py-3 rounded-xl shadow-md hover:bg-gold-600 active:scale-95 transition-all"
                   >
-                    {loading ? 'Buscando...' : 'Ver Meus Agendamentos'}
+                    {loading ? 'Buscando...' : 'Ver Meu Histórico'}
                   </button>
               </form>
           </div>
 
           {/* Results List */}
           {hasSearched && (
-              <div className="space-y-4 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                     <h3 className="font-serif text-lg font-bold text-gold-900">Seus Registros</h3>
-                     <span className="text-xs text-gray-400">{items.length} itens encontrados</span>
+              <div className="space-y-6 animate-fade-in">
+                  
+                  {/* Tabs */}
+                  <div className="flex bg-white p-1 rounded-xl border border-gold-100 shadow-sm">
+                      <button 
+                        onClick={() => setActiveTab('all')}
+                        className={`flex-1 py-2 text-[10px] font-black uppercase tracking-tighter rounded-lg transition-all ${activeTab === 'all' ? 'bg-gold-500 text-white shadow-sm' : 'text-gray-400'}`}
+                      >
+                        Tudo ({items.length})
+                      </button>
+                      <button 
+                        onClick={() => setActiveTab('appointments')}
+                        className={`flex-1 py-2 text-[10px] font-black uppercase tracking-tighter rounded-lg transition-all ${activeTab === 'appointments' ? 'bg-gold-500 text-white shadow-sm' : 'text-gray-400'}`}
+                      >
+                        Agenda ({appointmentsCount})
+                      </button>
+                      <button 
+                        onClick={() => setActiveTab('orders')}
+                        className={`flex-1 py-2 text-[10px] font-black uppercase tracking-tighter rounded-lg transition-all ${activeTab === 'orders' ? 'bg-gold-500 text-white shadow-sm' : 'text-gray-400'}`}
+                      >
+                        Pedidos ({ordersCount})
+                      </button>
                   </div>
 
-                  {items.length === 0 ? (
-                      <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-gray-300 text-gray-400">
-                          <span className="material-symbols-outlined text-4xl mb-2 opacity-50">history_toggle_off</span>
-                          <p>Nenhum agendamento ou pedido encontrado para este número.</p>
-                      </div>
-                  ) : (
-                      items.map((item, idx) => {
-                          const isAppt = item.type === 'appointment';
-                          const details = isAppt 
-                              ? getServiceData((item as Appointment).service_id)
-                              : getProductData((item as Order).product_id);
-                          
-                          const name = details ? details.name : (isAppt ? 'Serviço Removido' : 'Produto Removido');
-                          const date = isAppt ? (item as Appointment).start_time : (item as Order).created_at;
-                          
-                          // Image for styling
-                          const image = details?.image_url;
+                  <div className="space-y-4">
+                      {filteredItems.length === 0 ? (
+                          <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300 text-gray-400">
+                              <span className="material-symbols-outlined text-4xl mb-2 opacity-50">history_toggle_off</span>
+                              <p className="text-sm">Nenhum registro encontrado nesta categoria.</p>
+                          </div>
+                      ) : (
+                          filteredItems.map((item, idx) => {
+                              const isAppt = item.type === 'appointment';
+                              const details = isAppt 
+                                  ? getServiceData((item as Appointment).service_id)
+                                  : getProductData((item as Order).product_id);
+                              
+                              const name = details ? details.name : (isAppt ? 'Serviço Removido' : 'Produto Removido');
+                              const date = isAppt ? (item as Appointment).start_time : (item as Order).created_at;
+                              
+                              // Image for styling
+                              const image = details?.image_url;
 
-                          return (
-                              <div key={`${item.id}-${idx}`} className="bg-white p-4 rounded-2xl shadow-sm border border-gold-50 hover:shadow-md transition-shadow relative overflow-hidden group">
-                                  {/* Status Badge */}
-                                  <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-[10px] font-bold uppercase tracking-wider border-b border-l ${getStatusColor(item.status)}`}>
-                                      {translateStatus(item.status)}
-                                  </div>
-
-                                  <div className="flex gap-4 items-start pt-2">
-                                      <div className="w-16 h-16 rounded-xl bg-gray-100 shrink-0 overflow-hidden border border-gray-100">
-                                          {image ? (
-                                              <img src={image} alt="" className="w-full h-full object-cover" />
-                                          ) : (
-                                              <div className="w-full h-full flex items-center justify-center text-gold-300">
-                                                  <span className="material-symbols-outlined text-2xl">{isAppt ? 'spa' : 'shopping_bag'}</span>
-                                              </div>
-                                          )}
+                              return (
+                                  <div key={`${item.id}-${idx}`} className="bg-white p-4 rounded-2xl shadow-sm border border-gold-50 hover:shadow-md transition-shadow relative overflow-hidden group">
+                                      {/* Status Badge */}
+                                      <div className={`absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-[10px] font-bold uppercase tracking-wider border-b border-l ${getStatusColor(item.status)}`}>
+                                          {translateStatus(item.status)}
                                       </div>
-                                      
-                                      <div className="flex-1 min-w-0">
-                                          <p className="text-xs font-bold text-gold-500 uppercase tracking-wider mb-1">
-                                              {isAppt ? 'Agendamento' : 'Pedido de Produto'}
-                                          </p>
-                                          <h4 className="font-bold text-gray-800 text-base leading-tight mb-1">{name}</h4>
-                                          <div className="flex flex-col gap-0.5">
-                                              <div className="flex items-center gap-1 text-gray-500 text-xs">
-                                                  <span className="material-symbols-outlined text-[12px]">calendar_today</span>
-                                                  {format(new Date(date), "dd 'de' MMMM", { locale: ptBR })}
-                                              </div>
-                                              {isAppt && (
-                                                  <div className="flex items-center gap-1 text-gray-500 text-xs">
-                                                      <span className="material-symbols-outlined text-[12px]">schedule</span>
-                                                      {format(new Date(date), "HH:mm")}
+
+                                      <div className="flex gap-4 items-start pt-2">
+                                          <div className={`w-16 h-16 rounded-xl shrink-0 overflow-hidden border ${isAppt ? 'bg-purple-50 border-purple-100' : 'bg-orange-50 border-orange-100'}`}>
+                                              {image ? (
+                                                  <img src={image} alt="" className="w-full h-full object-cover" />
+                                              ) : (
+                                                  <div className="w-full h-full flex items-center justify-center text-gold-300">
+                                                      <span className="material-symbols-outlined text-2xl">{isAppt ? 'spa' : 'shopping_bag'}</span>
                                                   </div>
                                               )}
                                           </div>
+                                          
+                                          <div className="flex-1 min-w-0">
+                                              <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isAppt ? 'text-purple-500' : 'text-orange-500'}`}>
+                                                  {isAppt ? 'Agendamento' : 'Pedido de Produto'}
+                                              </p>
+                                              <h4 className="font-bold text-gray-800 text-base leading-tight mb-2">{name}</h4>
+                                              <div className="flex flex-col gap-1">
+                                                  <div className="flex items-center gap-1.5 text-gray-500 text-xs">
+                                                      <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                                                      {format(new Date(date), "dd 'de' MMMM", { locale: ptBR })}
+                                                  </div>
+                                                  {isAppt && (
+                                                      <div className="flex items-center gap-1.5 text-gray-500 text-xs">
+                                                          <span className="material-symbols-outlined text-[14px]">schedule</span>
+                                                          {format(new Date(date), "HH:mm")}
+                                                      </div>
+                                                  )}
+                                                  {!isAppt && (
+                                                      <div className="flex items-center gap-1.5 text-gold-600 text-xs font-bold">
+                                                          <span className="material-symbols-outlined text-[14px]">payments</span>
+                                                          R$ {details?.price.toFixed(2)}
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          </div>
                                       </div>
                                   </div>
-                              </div>
-                          );
-                      })
-                  )}
+                              );
+                          })
+                      )}
+                  </div>
               </div>
           )}
       </main>

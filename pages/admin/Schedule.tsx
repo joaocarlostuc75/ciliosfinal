@@ -62,6 +62,7 @@ export const Schedule: React.FC = () => {
   const [blockFormData, setBlockFormData] = useState({ 
     startDate: '', startTime: '09:00', endDate: '', endTime: '18:00', reason: 'Ausência' 
   });
+  const [conflicts, setConflicts] = useState<Appointment[]>([]);
   const [rescheduleFormData, setRescheduleFormData] = useState({ date: '', time: '' });
   
   // New Appointment Form Data
@@ -85,13 +86,32 @@ export const Schedule: React.FC = () => {
     setClients(await db.getClients());
   };
 
+  // Detect conflicts when block form changes
+  useEffect(() => {
+    if (isBlockModalOpen && blockFormData.startDate && blockFormData.startTime && blockFormData.endDate && blockFormData.endTime) {
+        const start = new Date(`${blockFormData.startDate}T${blockFormData.startTime}`);
+        const end = new Date(`${blockFormData.endDate}T${blockFormData.endTime}`);
+        
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start < end) {
+            const overlapping = appointments.filter(a => {
+                if (a.status === AppointmentStatus.CANCELLED) return false;
+                const aStart = new Date(a.start_time);
+                const aEnd = new Date(a.end_time);
+                return areIntervalsOverlapping({ start, end }, { start: aStart, end: aEnd });
+            });
+            setConflicts(overlapping);
+        } else {
+            setConflicts([]);
+        }
+    }
+  }, [blockFormData, isBlockModalOpen, appointments]);
+
   // --- Helper Functions ---
   const getServiceName = (id: string) => services.find(s => s.id === id)?.name || 'Unknown';
   const getClientData = (id: string) => clients.find(c => c.id === id);
 
   // --- Actions ---
   
-  // Updated to accept optional client object for immediate notification after creation
   const handleNotifyClient = (appt: Appointment, clientOverride?: Client) => {
     if (!salon) return;
     const client = clientOverride || getClientData(appt.client_id);
@@ -101,7 +121,6 @@ export const Schedule: React.FC = () => {
     const dateStr = format(new Date(appt.start_time), "dd/MM");
     const timeStr = format(new Date(appt.start_time), "HH:mm");
     
-    // Formal but friendly message
     const msg = `Olá ${client.name}, tudo bem? 🌸\n\nPassando para confirmar seu agendamento de *${serviceName}* no dia *${dateStr}* às *${timeStr}* na ${salon.name}.\n\nQualquer dúvida, estamos à disposição!\nAtenciosamente.`;
     
     window.open(`https://wa.me/55${client.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -142,11 +161,9 @@ export const Schedule: React.FC = () => {
       }
 
       try {
-          // 1. Get Service Details
           const service = services.find(s => s.id === apptFormData.serviceId);
           if (!service) throw new Error("Serviço não encontrado");
 
-          // 2. Create/Get Client
           const newClient = await db.createClient({
               id: crypto.randomUUID(),
               salon_id: salon.id,
@@ -155,7 +172,6 @@ export const Schedule: React.FC = () => {
               created_at: new Date().toISOString()
           });
 
-          // 3. Create Appointment
           const start = new Date(`${apptFormData.date}T${apptFormData.time}`);
           const end = addMinutes(start, service.duration_min);
 
@@ -170,10 +186,7 @@ export const Schedule: React.FC = () => {
               created_at: new Date().toISOString()
           });
 
-          // 4. Notify immediately
           handleNotifyClient(newAppt, newClient);
-
-          // 5. Refresh
           await loadData();
           setIsApptModalOpen(false);
 
@@ -188,11 +201,20 @@ export const Schedule: React.FC = () => {
       setBlockFormData({ 
           startDate: todayStr, startTime: '09:00', endDate: todayStr, endTime: '10:00', reason: '' 
       });
+      setConflicts([]);
       setIsBlockModalOpen(true);
   };
 
   const handleSaveBlock = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!salon) return;
+
+    if (conflicts.length > 0) {
+        if (!confirm(`Existem ${conflicts.length} agendamento(s) que conflitam com este bloqueio. Você deve reagendá-los ou cancelá-los antes de bloquear, ou o bloqueio impedirá novos agendamentos mas os antigos permanecerão visíveis. Deseja criar o bloqueio mesmo assim?`)) {
+            return;
+        }
+    }
+
     const start = new Date(`${blockFormData.startDate}T${blockFormData.startTime}`);
     const end = new Date(`${blockFormData.endDate}T${blockFormData.endTime}`);
 
@@ -200,7 +222,7 @@ export const Schedule: React.FC = () => {
 
     await db.addBlockedTime({
       id: crypto.randomUUID(),
-      salon_id: 'e2c0a884-6d9e-4861-a9d5-17154238805f',
+      salon_id: salon.id,
       start_time: start.toISOString(),
       end_time: end.toISOString(),
       reason: blockFormData.reason
@@ -210,7 +232,7 @@ export const Schedule: React.FC = () => {
   };
 
   const handleDeleteBlock = async (id: string) => {
-    if(confirm('Remover este bloqueio?')) {
+    if(confirm('Tem certeza que deseja desfazer este bloqueio?')) {
       await db.deleteBlockedTime(id);
       await loadData();
     }
@@ -260,7 +282,6 @@ export const Schedule: React.FC = () => {
         setCurrentMonth(newDate);
     } else {
         const newDate = addMonths(currentMonth, 1);
-        // Limit to Dec 2026
         if (newDate.getFullYear() > 2026) return;
         setCurrentMonth(newDate);
     }
@@ -344,8 +365,8 @@ export const Schedule: React.FC = () => {
                                         </h4>
                                         <p className="text-gray-500 italic text-xs truncate">{block.reason || 'Sem motivo'}</p>
                                     </div>
-                                    <button onClick={() => handleDeleteBlock(block.id)} className="text-red-400 hover:text-red-600 p-1">
-                                        <span className="material-symbols-outlined text-lg">delete</span>
+                                    <button onClick={() => handleDeleteBlock(block.id)} className="text-red-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition-colors">
+                                        <span className="material-symbols-outlined text-lg">delete_forever</span>
                                     </button>
                                 </div>
                             );
@@ -358,7 +379,6 @@ export const Schedule: React.FC = () => {
                                 <div key={appt.id} className={`group relative flex flex-col sm:flex-row gap-3 p-3 rounded-xl border transition-all ${
                                     isCancelled ? 'bg-red-50 border-red-100 opacity-60' : 'bg-white hover:bg-gold-50/30 border-gray-100 hover:border-gold-200 shadow-sm hover:shadow-md'
                                 }`}>
-                                    {/* Time Column */}
                                     <div className="flex sm:flex-col items-center sm:justify-center gap-2 sm:gap-0 sm:min-w-[4rem] sm:border-r border-gold-100 sm:pr-3">
                                         <span className={`text-lg font-bold ${isCancelled ? 'text-red-400 line-through' : 'text-gold-900'}`}>
                                             {format(new Date(appt.start_time), 'HH:mm')}
@@ -366,7 +386,6 @@ export const Schedule: React.FC = () => {
                                         <span className="text-xs text-gray-400 hidden sm:block">{format(new Date(appt.end_time), 'HH:mm')}</span>
                                     </div>
                                     
-                                    {/* Info Column */}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <h4 className="font-bold text-gray-800 text-base truncate">{client?.name || 'Cliente'}</h4>
@@ -379,7 +398,6 @@ export const Schedule: React.FC = () => {
                                         </p>
                                     </div>
 
-                                    {/* Action Bar */}
                                     <div className="flex items-center justify-end gap-1 mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
                                         {!isCancelled && (
                                             <>
@@ -418,12 +436,9 @@ export const Schedule: React.FC = () => {
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6">
        
-       {/* Left Column: Calendar (Desktop) / Top (Mobile) */}
        <div className="xl:w-80 flex flex-col gap-6 shrink-0">
           
-          {/* Calendar Widget */}
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gold-100">
-             {/* Calendar Header */}
              <div className="flex items-center justify-between mb-4">
                 <button onClick={() => handleMonthChange('prev')} className="p-1 hover:bg-gray-100 rounded-full text-gold-700">
                     <span className="material-symbols-outlined">chevron_left</span>
@@ -440,7 +455,6 @@ export const Schedule: React.FC = () => {
                 </button>
              </div>
 
-             {/* Days Grid */}
              <div className="grid grid-cols-7 gap-1 text-center mb-2">
                  {['D','S','T','Q','Q','S','S'].map((d, i) => (
                      <span key={i} className="text-[10px] font-bold text-gray-400">{d}</span>
@@ -472,7 +486,6 @@ export const Schedule: React.FC = () => {
              </div>
           </div>
 
-          {/* Quick Actions (Desktop/Tablet) */}
           <div className="hidden md:flex flex-col gap-3">
              <button 
                 onClick={openApptModal}
@@ -491,9 +504,7 @@ export const Schedule: React.FC = () => {
           </div>
        </div>
 
-       {/* Right/Bottom Column: Timeline List */}
        <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-lg border border-gold-100 overflow-hidden h-[600px] xl:h-auto">
-            {/* List Header & Filters */}
             <div className="p-4 border-b border-gold-100 bg-gold-50/30 flex flex-col sm:flex-row justify-between items-center sticky top-0 z-10 backdrop-blur gap-3">
                 <div className="flex items-center gap-2 bg-white rounded-lg p-1 shadow-sm border border-gold-100">
                     <button 
@@ -516,7 +527,6 @@ export const Schedule: React.FC = () => {
                     </button>
                 </div>
 
-                {/* Mobile Action Button */}
                 <div className="flex gap-2 w-full sm:w-auto md:hidden">
                     <button onClick={openApptModal} className="flex-1 text-white bg-gold-500 rounded-lg shadow-sm border border-gold-600 flex justify-center items-center gap-2 font-bold text-xs p-2">
                         <span className="material-symbols-outlined text-sm">add</span>
@@ -529,13 +539,10 @@ export const Schedule: React.FC = () => {
                 </div>
             </div>
 
-            {/* List Content based on ViewMode */}
             <div className="flex-1 overflow-y-auto p-4">
                 
-                {/* DAY VIEW */}
                 {viewMode === 'day' && renderDayGroup(selectedDate, true)}
 
-                {/* WEEK VIEW */}
                 {viewMode === 'week' && (
                     <div className="space-y-4">
                         <div className="text-center mb-6">
@@ -554,7 +561,6 @@ export const Schedule: React.FC = () => {
                     </div>
                 )}
 
-                {/* MONTH VIEW */}
                 {viewMode === 'month' && (
                     <div className="space-y-4">
                          <div className="text-center mb-6">
@@ -577,32 +583,77 @@ export const Schedule: React.FC = () => {
        {/* Block Modal */}
        {isBlockModalOpen && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
-                  <h3 className="font-serif text-xl font-bold mb-4">Bloquear Período</h3>
-                  <form onSubmit={handleSaveBlock} className="space-y-4">
+              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md animate-fade-in flex flex-col max-h-[90vh]">
+                  <h3 className="font-serif text-xl font-bold mb-4 shrink-0">Bloquear Período</h3>
+                  <form onSubmit={handleSaveBlock} className="space-y-4 overflow-y-auto pr-1">
                       <div className="grid grid-cols-2 gap-3">
                           <div className="col-span-2">
-                             <label className="text-xs font-bold text-gray-500">Início</label>
+                             <label className="text-xs font-bold text-gray-500 uppercase tracking-tight">Início do Bloqueio</label>
                              <div className="flex gap-2">
                                 <input type="date" required value={blockFormData.startDate} onChange={e => setBlockFormData({...blockFormData, startDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
-                                <input type="time" required value={blockFormData.startTime} onChange={e => setBlockFormData({...blockFormData, startTime: e.target.value})} className="w-20 border rounded-lg p-2 text-sm" />
+                                <input type="time" required value={blockFormData.startTime} onChange={e => setBlockFormData({...blockFormData, startTime: e.target.value})} className="w-24 border rounded-lg p-2 text-sm" />
                              </div>
                           </div>
                           <div className="col-span-2">
-                             <label className="text-xs font-bold text-gray-500">Fim</label>
+                             <label className="text-xs font-bold text-gray-500 uppercase tracking-tight">Fim do Bloqueio</label>
                              <div className="flex gap-2">
                                 <input type="date" required value={blockFormData.endDate} onChange={e => setBlockFormData({...blockFormData, endDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
-                                <input type="time" required value={blockFormData.endTime} onChange={e => setBlockFormData({...blockFormData, endTime: e.target.value})} className="w-20 border rounded-lg p-2 text-sm" />
+                                <input type="time" required value={blockFormData.endTime} onChange={e => setBlockFormData({...blockFormData, endTime: e.target.value})} className="w-24 border rounded-lg p-2 text-sm" />
                              </div>
                           </div>
                       </div>
                       <div>
-                          <label className="text-xs font-bold text-gray-500">Motivo</label>
-                          <input type="text" required value={blockFormData.reason} onChange={e => setBlockFormData({...blockFormData, reason: e.target.value})} className="w-full border rounded-lg p-2 mt-1 text-sm" placeholder="Ex: Férias" />
+                          <label className="text-xs font-bold text-gray-500 uppercase tracking-tight">Motivo / Título</label>
+                          <input type="text" required value={blockFormData.reason} onChange={e => setBlockFormData({...blockFormData, reason: e.target.value})} className="w-full border rounded-lg p-2 mt-1 text-sm" placeholder="Ex: Férias, Manutenção..." />
                       </div>
-                      <div className="flex gap-2 pt-2">
-                          <button type="button" onClick={() => setIsBlockModalOpen(false)} className="flex-1 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg text-sm">Cancelar</button>
-                          <button type="submit" className="flex-1 py-2 bg-gray-800 text-white font-bold rounded-lg hover:bg-black text-sm">Bloquear</button>
+
+                      {/* CONFLICTS LIST */}
+                      {conflicts.length > 0 && (
+                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mt-2">
+                             <h4 className="text-xs font-bold text-red-700 uppercase mb-3 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">warning</span>
+                                {conflicts.length} Conflitos Encontrados
+                             </h4>
+                             <div className="space-y-3">
+                                {conflicts.map(c => {
+                                    const client = getClientData(c.client_id);
+                                    return (
+                                        <div key={c.id} className="bg-white p-2 rounded-lg border border-red-100 flex items-center justify-between shadow-sm">
+                                            <div className="min-w-0">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase leading-none">{format(new Date(c.start_time), 'HH:mm')}</p>
+                                                <p className="text-xs font-bold text-gray-800 truncate">{client?.name || 'Cliente'}</p>
+                                            </div>
+                                            <div className="flex gap-1 shrink-0">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleOpenReschedule(c)}
+                                                    className="bg-orange-50 text-orange-600 p-1.5 rounded hover:bg-orange-100 transition-colors"
+                                                    title="Remarcar"
+                                                >
+                                                    <span className="material-symbols-outlined text-base">edit_calendar</span>
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleUpdateStatus(c.id, AppointmentStatus.CANCELLED)}
+                                                    className="bg-red-50 text-red-600 p-1.5 rounded hover:bg-red-100 transition-colors"
+                                                    title="Cancelar"
+                                                >
+                                                    <span className="material-symbols-outlined text-base">close</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                             </div>
+                             <p className="text-[10px] text-red-400 mt-3 italic leading-tight">
+                                Nota: Resolva os conflitos acima para que os clientes sejam devidamente notificados.
+                             </p>
+                          </div>
+                      )}
+
+                      <div className="flex gap-2 pt-4 shrink-0">
+                          <button type="button" onClick={() => setIsBlockModalOpen(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-lg text-sm">Cancelar</button>
+                          <button type="submit" className="flex-1 py-3 bg-gray-800 text-white font-bold rounded-lg hover:bg-black text-sm shadow-md">Confirmar Bloqueio</button>
                       </div>
                   </form>
               </div>
@@ -616,7 +667,6 @@ export const Schedule: React.FC = () => {
                   <h3 className="font-serif text-xl font-bold mb-4 text-gold-900">Novo Agendamento</h3>
                   <form onSubmit={handleSaveNewAppointment} className="space-y-4">
                       
-                      {/* Service Selection */}
                       <div>
                           <label className="text-xs font-bold text-gray-500 uppercase">Serviço</label>
                           <select 
@@ -632,7 +682,6 @@ export const Schedule: React.FC = () => {
                           </select>
                       </div>
 
-                      {/* Client Info */}
                       <div>
                           <label className="text-xs font-bold text-gray-500 uppercase">Nome do Cliente</label>
                           <input 
@@ -657,7 +706,6 @@ export const Schedule: React.FC = () => {
                           />
                       </div>
 
-                      {/* Date & Time */}
                       <div className="grid grid-cols-2 gap-3">
                           <div>
                               <label className="text-xs font-bold text-gray-500 uppercase">Data</label>
@@ -696,16 +744,16 @@ export const Schedule: React.FC = () => {
                   <h3 className="font-serif text-xl font-bold mb-4">Remarcar</h3>
                   <form onSubmit={handleSaveReschedule} className="space-y-4">
                       <div>
-                          <label className="text-xs font-bold text-gray-500">Nova Data</label>
-                          <input type="date" required value={rescheduleFormData.date} onChange={e => setRescheduleFormData({...rescheduleFormData, date: e.target.value})} className="w-full border rounded-lg p-2 mt-1" />
+                          <label className="text-xs font-bold text-gray-500 uppercase tracking-tight">Nova Data</label>
+                          <input type="date" required value={rescheduleFormData.date} onChange={e => setRescheduleFormData({...rescheduleFormData, date: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 mt-1" />
                       </div>
                       <div>
-                          <label className="text-xs font-bold text-gray-500">Novo Horário</label>
-                          <input type="time" required value={rescheduleFormData.time} onChange={e => setRescheduleFormData({...rescheduleFormData, time: e.target.value})} className="w-full border rounded-lg p-2 mt-1" />
+                          <label className="text-xs font-bold text-gray-500 uppercase tracking-tight">Novo Horário</label>
+                          <input type="time" required value={rescheduleFormData.time} onChange={e => setRescheduleFormData({...rescheduleFormData, time: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 mt-1" />
                       </div>
-                      <div className="flex gap-2 pt-2">
-                          <button type="button" onClick={() => setIsRescheduleModalOpen(false)} className="flex-1 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg text-sm">Cancelar</button>
-                          <button type="submit" className="flex-1 py-2 bg-gold-500 text-white font-bold rounded-lg hover:bg-gold-600 text-sm">Salvar</button>
+                      <div className="flex gap-2 pt-4">
+                          <button type="button" onClick={() => setIsRescheduleModalOpen(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-lg text-sm">Cancelar</button>
+                          <button type="submit" className="flex-1 py-3 bg-gold-500 text-white font-bold rounded-lg hover:bg-gold-600 text-sm shadow-md">Salvar</button>
                       </div>
                   </form>
               </div>
