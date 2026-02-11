@@ -3,7 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
 import { Service, AppointmentStatus, Salon, DaySchedule } from '../../types';
-import { format, addMinutes, isBefore, addDays, areIntervalsOverlapping } from 'date-fns';
+import { 
+    format, addMinutes, isBefore, addDays, areIntervalsOverlapping, 
+    startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, 
+    isSameMonth, isSameDay, addMonths, subMonths, isAfter, startOfDay 
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface SlotInfo {
@@ -21,11 +25,9 @@ export const Booking: React.FC = () => {
   const [subscriptionValid, setSubscriptionValid] = useState(true);
   
   // Step 1: Date & Time
-  const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  const [selectedDate, setSelectedDate] = useState<Date>(() => startOfDay(new Date()));
+  const [viewDate, setViewDate] = useState<Date>(() => startOfDay(new Date())); // Controls the calendar month view
+
   const [allSlots, setAllSlots] = useState<SlotInfo[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export const Booking: React.FC = () => {
     init();
   }, [serviceId]);
 
-  // Generate Slots Logic (Including Busy ones for feedback)
+  // Generate Slots Logic
   useEffect(() => {
     const fetchSlots = async () => {
         if (!service || !salon) return;
@@ -175,7 +177,6 @@ export const Booking: React.FC = () => {
       setLoading(false);
       window.open(waLink, '_blank');
       
-      // Use replace to prevent going back to the form with browser back button
       navigate(`/my-schedule?phone=${clientPhone}`, { replace: true });
 
     } catch (error) {
@@ -184,11 +185,47 @@ export const Booking: React.FC = () => {
     }
   };
 
+  // --- Calendar Logic ---
+  const generateCalendarDays = () => {
+      const monthStart = startOfMonth(viewDate);
+      const monthEnd = endOfMonth(monthStart);
+      const startDate = startOfWeek(monthStart);
+      const endDate = endOfWeek(monthEnd);
+      return eachDayOfInterval({ start: startDate, end: endDate });
+  };
+
+  const isDayDisabled = (day: Date) => {
+      const today = startOfDay(new Date());
+      // 1. Disable past days
+      if (isBefore(day, today)) return true;
+      
+      // 2. Disable days after the end of the CURRENT month (strict adherence to prompt)
+      // "só permita agendamentos até o último dia útil do mês vigente"
+      const limitDate = endOfMonth(today); 
+      if (isAfter(day, limitDate)) return true;
+
+      // 3. Disable closed days from salon config
+      const dayConfig = salon?.opening_hours.find(d => d.dayOfWeek === day.getDay());
+      if (!dayConfig?.isOpen) return true;
+
+      return false;
+  };
+
+  const handleMonthChange = (direction: 'prev' | 'next') => {
+      if (direction === 'prev') {
+          const newDate = subMonths(viewDate, 1);
+          // Don't allow going back too far if needed, but generic navigation is fine
+          setViewDate(newDate);
+      } else {
+          setViewDate(addMonths(viewDate, 1));
+      }
+  };
+
   if (!service) return <div className="p-8 text-center mt-10">Carregando detalhes...</div>;
 
   return (
     <div className="min-h-screen bg-luxury-light flex flex-col">
-      {/* Navbar with blur effect */}
+      {/* Navbar */}
       <nav className="p-4 flex items-center border-b border-gold-200 bg-white/80 backdrop-blur-md sticky top-0 z-30 shadow-sm transition-all">
         <button 
           onClick={() => step === 1 ? navigate(-1) : setStep(1)} 
@@ -201,10 +238,9 @@ export const Booking: React.FC = () => {
         </span>
       </nav>
 
-      {/* Main Content with bottom padding for sticky footer */}
       <main className="flex-1 w-full max-w-lg mx-auto p-4 pb-32 md:pb-8">
         
-        {/* Service Summary Card */}
+        {/* Service Summary */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-gold-100 flex gap-4 mb-6 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-24 h-24 bg-gold-50 rounded-bl-full -mr-10 -mt-10 z-0 transition-transform group-hover:scale-110"></div>
             <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 z-10 bg-gray-100 border border-gray-100 shadow-inner">
@@ -227,54 +263,93 @@ export const Booking: React.FC = () => {
         {step === 1 && (
             <div className="animate-fade-in space-y-8">
                 
-                {/* Date Selector */}
+                {/* Calendar View */}
                 <div>
                     <h3 className="font-sans text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 ml-1">Selecione a Data</h3>
-                    <div className="flex gap-2 overflow-x-auto pb-4 -mx-4 px-4 no-scrollbar scroll-smooth">
-                        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(offset => {
-                            const date = addDays(new Date(), offset);
-                            const isSelected = format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-                            const dayConfig = salon?.opening_hours.find(d => d.dayOfWeek === date.getDay());
-                            const isClosed = !dayConfig?.isOpen;
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gold-100">
+                        {/* Month Header */}
+                        <div className="flex items-center justify-between mb-4">
+                            <button onClick={() => handleMonthChange('prev')} className="p-1 hover:bg-gray-100 rounded-full text-gold-700">
+                                <span className="material-symbols-outlined">chevron_left</span>
+                            </button>
+                            <h4 className="font-serif font-bold text-gold-900 capitalize">
+                                {format(viewDate, 'MMMM yyyy', { locale: ptBR })}
+                            </h4>
+                            <button onClick={() => handleMonthChange('next')} className="p-1 hover:bg-gray-100 rounded-full text-gold-700">
+                                <span className="material-symbols-outlined">chevron_right</span>
+                            </button>
+                        </div>
 
-                            return (
-                                <button
-                                    key={offset}
-                                    onClick={() => setSelectedDate(date)}
-                                    className={`flex flex-col items-center justify-center min-w-[4.5rem] h-20 rounded-2xl border transition-all active:scale-95 ${
-                                        isSelected 
-                                        ? 'bg-gold-500 border-gold-500 text-white shadow-lg scale-105 z-10' 
-                                        : isClosed 
-                                            ? 'bg-gray-50 border-gray-100 text-gray-300'
-                                            : 'bg-white border-gold-100 text-gray-400 hover:border-gold-300'
-                                    }`}
-                                >
-                                    <span className="text-[10px] font-bold uppercase tracking-wide">
-                                        {format(date, 'EEE', { locale: ptBR }).replace('.', '')}
-                                    </span>
-                                    <span className="text-2xl font-serif font-bold">{format(date, 'dd')}</span>
-                                </button>
-                            );
-                        })}
+                        {/* Week Days */}
+                        <div className="grid grid-cols-7 text-center mb-2">
+                            {['D','S','T','Q','Q','S','S'].map((d, i) => (
+                                <span key={i} className="text-[10px] font-bold text-gray-400">{d}</span>
+                            ))}
+                        </div>
+
+                        {/* Days Grid */}
+                        <div className="grid grid-cols-7 gap-1">
+                            {generateCalendarDays().map((day, idx) => {
+                                const isDisabled = isDayDisabled(day);
+                                const isSelected = isSameDay(day, selectedDate);
+                                const isCurrentMonth = isSameMonth(day, viewDate);
+                                
+                                return (
+                                    <button
+                                        key={idx}
+                                        onClick={() => {
+                                            if (!isDisabled) {
+                                                setSelectedDate(day);
+                                                setSelectedSlot(null); // Reset slot when date changes
+                                            }
+                                        }}
+                                        disabled={isDisabled}
+                                        className={`
+                                            h-9 rounded-lg flex items-center justify-center text-sm font-medium transition-all relative
+                                            ${!isCurrentMonth ? 'opacity-30' : ''}
+                                            ${isDisabled 
+                                                ? 'text-gray-300 cursor-not-allowed decoration-slice' 
+                                                : isSelected 
+                                                    ? 'bg-gold-500 text-white shadow-md font-bold' 
+                                                    : 'text-gray-700 hover:bg-gold-50 hover:text-gold-900'
+                                            }
+                                        `}
+                                    >
+                                        {format(day, 'd')}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="mt-3 flex items-center gap-2 justify-center">
+                             <span className="material-symbols-outlined text-gray-400 text-xs">info</span>
+                             <p className="text-[10px] text-gray-400 text-center">Agendamentos permitidos apenas até o fim do mês vigente.</p>
+                        </div>
                     </div>
                 </div>
 
                 {/* Slots Grid */}
                 <div>
                     <div className="flex justify-between items-end mb-3 ml-1">
-                        <h3 className="font-sans text-xs font-bold text-gray-400 uppercase tracking-wider">Horários</h3>
-                        {selectedSlot && (
-                            <span className="text-xs font-bold text-gold-600 animate-fade-in">
-                                {format(selectedSlot, "EEEE, dd/MM 'às' HH:mm", { locale: ptBR })}
-                            </span>
-                        )}
+                        <h3 className="font-sans text-xs font-bold text-gray-400 uppercase tracking-wider">Horários Disponíveis</h3>
+                        <span className="text-xs font-bold text-gold-600 animate-fade-in">
+                            {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+                        </span>
                     </div>
 
                     <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
                         {allSlots.length === 0 ? (
-                            <div className="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-gray-300">
-                                <span className="material-symbols-outlined text-gray-300 text-4xl mb-2">event_busy</span>
-                                <p className="text-gray-400 text-sm">Nenhum horário disponível.</p>
+                            <div className="col-span-full py-8 text-center bg-white rounded-2xl border border-dashed border-gray-300">
+                                {isDayDisabled(selectedDate) ? (
+                                    <>
+                                        <span className="material-symbols-outlined text-gray-300 text-4xl mb-2">calendar_off</span>
+                                        <p className="text-gray-400 text-sm">Data indisponível ou fechada.</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="material-symbols-outlined text-gray-300 text-4xl mb-2">event_busy</span>
+                                        <p className="text-gray-400 text-sm">Sem horários livres nesta data.</p>
+                                    </>
+                                )}
                             </div>
                         ) : allSlots.map((slot, i) => {
                             const isSelected = selectedSlot?.getTime() === slot.time.getTime();
