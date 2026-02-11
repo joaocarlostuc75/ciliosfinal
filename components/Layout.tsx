@@ -10,6 +10,34 @@ interface LayoutProps {
   title: string;
 }
 
+const ThemeToggle = () => {
+  const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    if (newTheme) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
+
+  return (
+    <button 
+      onClick={toggleTheme}
+      className="p-2 rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gold-500 transition-colors"
+      title="Alternar Tema"
+    >
+      <span className="material-symbols-outlined">
+        {isDark ? 'light_mode' : 'dark_mode'}
+      </span>
+    </button>
+  );
+};
+
 const SidebarItem = ({ icon, label, to, active, onClick }: { icon: string; label: string; to: string; active: boolean; onClick?: () => void }) => (
   <Link
     to={to}
@@ -17,7 +45,7 @@ const SidebarItem = ({ icon, label, to, active, onClick }: { icon: string; label
     className={`flex items-center gap-4 px-6 py-4 transition-all duration-200 ${
       active
         ? 'bg-gold-500 text-white shadow-lg'
-        : 'text-gold-900 hover:bg-gold-100'
+        : 'text-gold-900 dark:text-gray-300 hover:bg-gold-100 dark:hover:bg-zinc-800'
     }`}
   >
     <span className="material-symbols-outlined">{icon}</span>
@@ -65,7 +93,7 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
   const closeSidebar = () => setIsSidebarOpen(false);
 
   return (
-    <div className="flex h-screen bg-luxury-light overflow-hidden">
+    <div className="flex h-screen bg-luxury-light dark:bg-luxury-charcoal overflow-hidden transition-colors duration-300">
       
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
@@ -78,14 +106,14 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
       {/* Sidebar */}
       <aside 
         className={`
-          fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gold-300 flex flex-col shadow-xl 
+          fixed inset-y-0 left-0 z-30 w-64 bg-white dark:bg-luxury-card border-r border-gold-300 dark:border-luxury-border flex flex-col shadow-xl 
           transition-transform duration-300 ease-in-out
           md:relative md:translate-x-0
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
-        <div className="p-8 flex flex-col items-center border-b border-gold-100 relative">
-           <div className="w-20 h-20 rounded-full border-2 border-gold-500 flex items-center justify-center bg-luxury-light mb-3 overflow-hidden shadow-sm">
+        <div className="p-8 flex flex-col items-center border-b border-gold-100 dark:border-luxury-border relative">
+           <div className="w-20 h-20 rounded-full border-2 border-gold-500 flex items-center justify-center bg-luxury-light dark:bg-luxury-charcoal mb-3 overflow-hidden shadow-sm">
              {salon?.logo_url ? (
                  <ImageWithFallback 
                     src={salon.logo_url} 
@@ -94,13 +122,13 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
                     fallbackIcon="diamond"
                  />
              ) : (
-                 <span className="material-symbols-outlined text-gold-600 text-3xl">diamond</span>
+                 <span className="material-symbols-outlined text-gold-600 dark:text-gold-500 text-3xl">diamond</span>
              )}
            </div>
-           <h1 className="font-serif font-bold text-lg text-gold-700 text-center leading-tight">
+           <h1 className="font-serif font-bold text-lg text-gold-700 dark:text-gold-500 text-center leading-tight">
                {salon?.name || 'Admin Panel'}
            </h1>
-           <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Gerenciamento</p>
+           <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">Gerenciamento</p>
            
            <button 
              onClick={closeSidebar}
@@ -121,10 +149,10 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
           <SidebarItem icon="settings" label="Configurações" to="/admin/settings" active={location.pathname.startsWith('/admin/settings')} onClick={closeSidebar} />
         </nav>
 
-        <div className="p-6 border-t border-gold-100 mt-auto">
+        <div className="p-6 border-t border-gold-100 dark:border-luxury-border mt-auto">
             <button 
                 onClick={handleLogout}
-                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gold-600 transition-colors w-full"
+                className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gold-600 dark:hover:text-gold-500 transition-colors w-full"
             >
                 <span className="material-symbols-outlined text-lg">logout</span>
                 Sair
@@ -137,20 +165,32 @@ export const AdminLayout: React.FC<LayoutProps> = ({ children, title }) => {
         {/* Broadcast Banner */}
         <BroadcastBanner />
 
-        {/* Mobile Header */}
-        <header className="md:hidden bg-white h-16 border-b border-gold-200 flex items-center justify-between px-4 z-10 shrink-0">
-             <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-gold-700 hover:bg-gold-50 rounded-lg transition-colors">
-                <span className="material-symbols-outlined">menu</span>
-             </button>
-             <span className="font-serif font-bold text-gold-700">{title}</span>
-             <div className="w-8"></div>
+        {/* Header */}
+        <header className="bg-white dark:bg-luxury-card h-16 border-b border-gold-200 dark:border-luxury-border flex items-center justify-between px-4 md:px-10 z-10 shrink-0 shadow-sm transition-colors">
+             <div className="flex items-center gap-4">
+                 <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-gold-700 dark:text-gold-500 hover:bg-gold-50 dark:hover:bg-zinc-800 rounded-lg transition-colors">
+                    <span className="material-symbols-outlined">menu</span>
+                 </button>
+                 <span className="font-serif font-bold text-gold-700 dark:text-gold-500 hidden md:block text-xl">
+                   {title}
+                 </span>
+                 <span className="font-serif font-bold text-gold-700 dark:text-gold-500 md:hidden">
+                   {title}
+                 </span>
+             </div>
+             
+             <div className="flex items-center gap-2">
+                 <ThemeToggle />
+                 <div className="w-8 h-8 rounded-full bg-gold-50 dark:bg-zinc-800 flex items-center justify-center border border-gold-200 dark:border-luxury-border">
+                    <span className="material-symbols-outlined text-gold-600 dark:text-gold-500 text-lg">person</span>
+                 </div>
+             </div>
         </header>
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-4 md:p-10 relative scroll-smooth">
-            <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-gold-100/50 to-transparent pointer-events-none" />
+            <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-gold-100/50 dark:from-gold-900/10 to-transparent pointer-events-none transition-colors" />
             <div className="relative z-0 max-w-6xl mx-auto">
-                <h2 className="font-serif text-3xl font-bold text-gold-900 mb-8 hidden md:block">{title}</h2>
                 {children}
             </div>
         </div>
@@ -174,7 +214,7 @@ export const SuperAdminLayout: React.FC<LayoutProps> = ({ children, title }) => 
   const closeSidebar = () => setIsSidebarOpen(false);
 
   return (
-    <div className="flex h-screen bg-luxury-light overflow-hidden">
+    <div className="flex h-screen bg-luxury-light dark:bg-luxury-charcoal overflow-hidden transition-colors duration-300">
       
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
@@ -239,19 +279,28 @@ export const SuperAdminLayout: React.FC<LayoutProps> = ({ children, title }) => 
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative w-full">
-        {/* Mobile Header */}
-        <header className="md:hidden bg-white h-16 border-b border-gold-200 flex items-center justify-between px-4 z-10 shrink-0">
-             <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-gold-900 hover:bg-gold-50 rounded-lg transition-colors">
-                <span className="material-symbols-outlined">menu</span>
-             </button>
-             <span className="font-serif font-bold text-gold-900">{title}</span>
-             <div className="w-8"></div>
+        {/* Header */}
+        <header className="bg-white dark:bg-luxury-card h-16 border-b border-gold-200 dark:border-luxury-border flex items-center justify-between px-4 md:px-10 z-10 shrink-0 shadow-sm transition-colors">
+             <div className="flex items-center gap-4">
+                 <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-gold-900 dark:text-gold-500 hover:bg-gold-50 dark:hover:bg-zinc-800 rounded-lg transition-colors">
+                    <span className="material-symbols-outlined">menu</span>
+                 </button>
+                 <span className="font-serif font-bold text-gold-900 dark:text-gold-500 hidden md:block text-xl">
+                   {title}
+                 </span>
+                 <span className="font-serif font-bold text-gold-900 dark:text-gold-500 md:hidden">
+                   {title}
+                 </span>
+             </div>
+             
+             <div className="flex items-center gap-2">
+                 <ThemeToggle />
+             </div>
         </header>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-10 relative scroll-smooth bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 md:p-10 relative scroll-smooth bg-gray-50 dark:bg-luxury-charcoal transition-colors">
             <div className="relative z-0 max-w-6xl mx-auto">
-                <h2 className="font-serif text-3xl font-bold text-gold-900 mb-8 hidden md:block">{title}</h2>
                 {children}
             </div>
         </div>

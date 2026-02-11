@@ -21,11 +21,18 @@ export const Dashboard: React.FC = () => {
   });
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [topItemsData, setTopItemsData] = useState<any[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains('dark'));
 
   // Theme Colors
-  const COLORS = ['#C5A059', '#1A1612', '#8E6E3E', '#E5E7EB', '#FCD34D'];
+  const COLORS = ['#C5A059', '#1A1612', '#8E6E3E', '#94A3B8', '#FCD34D'];
 
   useEffect(() => {
+    // Listen for theme changes to update charts
+    const observer = new MutationObserver(() => {
+        setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -71,7 +78,6 @@ export const Dashboard: React.FC = () => {
             // Process Orders
             monthOrders.forEach(o => {
                 const product = products.find(p => p.id === o.product_id);
-                // Use current price, or 0 if product deleted. ideally order should store historical price
                 const price = product ? product.price : 0; 
                 const productName = product ? `(Prod) ${product.name}` : 'Produto desconhecido';
 
@@ -95,12 +101,11 @@ export const Dashboard: React.FC = () => {
                 averageTicket: ticket,
             });
 
-            // --- 3. Prepare Chart Data: Revenue over Time (Daily) ---
+            // --- 3. Prepare Chart Data ---
             const chartEndDate = (today > monthEnd) ? monthEnd : today;
             const daysInMonth = eachDayOfInterval({ start: monthStart, end: chartEndDate });
             
             const chartData = daysInMonth.map(day => {
-                // Service Revenue for Day
                 const dayAppts = monthAppts.filter(a => 
                     isSameDay(new Date(a.start_time), day) && 
                     (a.status === AppointmentStatus.COMPLETED || a.status === AppointmentStatus.CONFIRMED)
@@ -110,7 +115,6 @@ export const Dashboard: React.FC = () => {
                     return acc + (s ? s.price : 0);
                 }, 0);
 
-                // Product Revenue for Day
                 const dayOrders = monthOrders.filter(o => 
                     isSameDay(new Date(o.created_at), day) &&
                     o.status === OrderStatus.COMPLETED
@@ -129,11 +133,11 @@ export const Dashboard: React.FC = () => {
             });
             setRevenueData(chartData);
 
-            // --- 4. Prepare Pie Chart Data: Top Items (Services + Products) ---
+            // --- 4. Prepare Pie Chart Data ---
             const pieData = Object.entries(itemCounts)
                 .map(([name, value]) => ({ name, value }))
                 .sort((a, b) => b.value - a.value)
-                .slice(0, 5); // Top 5 items
+                .slice(0, 5);
             
             setTopItemsData(pieData);
         } catch (error) {
@@ -144,14 +148,15 @@ export const Dashboard: React.FC = () => {
     };
     
     fetchData();
+    return () => observer.disconnect();
   }, []);
 
   const StatCard = ({ title, value, subtext, icon, colorClass }: any) => (
-    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gold-100 flex items-start justify-between hover:shadow-xl transition-shadow">
+    <div className="bg-white dark:bg-luxury-card p-6 rounded-2xl shadow-lg border border-gold-100 dark:border-luxury-border flex items-start justify-between hover:shadow-xl transition-all">
         <div>
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">{title}</p>
-            <h3 className="text-2xl md:text-3xl font-serif font-bold text-gold-900">{value}</h3>
-            {subtext && <p className="text-xs mt-1 font-medium text-gray-400">{subtext}</p>}
+            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">{title}</p>
+            <h3 className="text-2xl md:text-3xl font-serif font-bold text-gold-900 dark:text-gold-500">{value}</h3>
+            {subtext && <p className="text-xs mt-1 font-medium text-gray-400 dark:text-gray-500">{subtext}</p>}
         </div>
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-md ${colorClass}`}>
             <span className="material-symbols-outlined text-2xl">{icon}</span>
@@ -168,19 +173,24 @@ export const Dashboard: React.FC = () => {
       );
   }
 
+  const axisColor = isDarkMode ? '#94A3B8' : '#9CA3AF';
+  const gridColor = isDarkMode ? '#2A2E35' : '#f0f0f0';
+  const tooltipBg = isDarkMode ? '#1A1D23' : '#FFFFFF';
+  const tooltipBorder = isDarkMode ? '#2A2E35' : '#E5E7EB';
+
   return (
     <div className="space-y-8 pb-10">
       
       {/* Header Info */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
-            <h2 className="text-gray-500 font-sans text-sm">Visão Geral</h2>
-            <p className="text-gold-900 font-serif text-2xl font-bold capitalize">
+            <h2 className="text-gray-500 dark:text-gray-400 font-sans text-sm">Resumo Mensal</h2>
+            <p className="text-gold-900 dark:text-gold-500 font-serif text-2xl font-bold capitalize">
                 {format(new Date(), "MMMM 'de' yyyy", { locale: ptBR })}
             </p>
         </div>
         <div className="text-right hidden md:block">
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
+            <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-xs font-bold border border-green-200 dark:border-green-800">
                 Sistema Operacional
             </span>
         </div>
@@ -200,7 +210,7 @@ export const Dashboard: React.FC = () => {
             value={metrics.monthlyAppointments} 
             subtext={`R$ ${metrics.serviceRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em serviços`}
             icon="spa" 
-            colorClass="bg-gray-800" 
+            colorClass="bg-gray-800 dark:bg-zinc-800" 
         />
         <StatCard 
             title="Vendas de Produtos" 
@@ -222,13 +232,12 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Main Chart: Revenue Evolution */}
-        <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-xl border border-gold-100 flex flex-col">
+        <div className="lg:col-span-2 bg-white dark:bg-luxury-card p-8 rounded-3xl shadow-xl border border-gold-100 dark:border-luxury-border flex flex-col transition-colors">
             <div className="flex justify-between items-center mb-6">
-                <h3 className="font-serif text-xl font-bold text-gold-900">Evolução de Faturamento</h3>
-                <span className="text-xs text-gray-400 uppercase tracking-widest">Diário</span>
+                <h3 className="font-serif text-xl font-bold text-gold-900 dark:text-gold-500">Evolução de Faturamento</h3>
+                <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-widest">Diário</span>
             </div>
             
-            {/* IMPORTANT: Explicit Style Height to prevent Recharts crash */}
             <div className="w-full" style={{ height: '300px', minHeight: '300px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -238,22 +247,28 @@ export const Dashboard: React.FC = () => {
                                 <stop offset="95%" stopColor="#C5A059" stopOpacity={0}/>
                             </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                         <XAxis 
                             dataKey="date" 
                             axisLine={false} 
                             tickLine={false} 
-                            tick={{ fill: '#9CA3AF', fontSize: 12 }} 
+                            tick={{ fill: axisColor, fontSize: 12 }} 
                             dy={10}
                         />
                         <YAxis 
                             axisLine={false} 
                             tickLine={false} 
-                            tick={{ fill: '#9CA3AF', fontSize: 12 }}
+                            tick={{ fill: axisColor, fontSize: 12 }}
                             tickFormatter={(value) => `R$${value}`}
                         />
                         <Tooltip 
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+                            contentStyle={{ 
+                                backgroundColor: tooltipBg, 
+                                borderRadius: '12px', 
+                                border: `1px solid ${tooltipBorder}`, 
+                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' 
+                            }}
+                            itemStyle={{ color: isDarkMode ? '#FDFBF7' : '#1A1612' }}
                             formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Faturamento']}
                         />
                         <Area 
@@ -270,11 +285,10 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Secondary Chart: Top Items */}
-        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gold-100 flex flex-col">
-            <h3 className="font-serif text-xl font-bold text-gold-900 mb-2">Top Itens</h3>
-            <p className="text-xs text-gray-400 mb-6">Serviços e Produtos mais vendidos</p>
+        <div className="bg-white dark:bg-luxury-card p-8 rounded-3xl shadow-xl border border-gold-100 dark:border-luxury-border flex flex-col transition-colors">
+            <h3 className="font-serif text-xl font-bold text-gold-900 dark:text-gold-500 mb-2">Top Itens</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-6">Serviços e Produtos mais vendidos</p>
             
-             {/* IMPORTANT: Explicit Style Height to prevent Recharts crash */}
             <div className="w-full relative" style={{ height: '300px', minHeight: '300px' }}>
                 {topItemsData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -293,7 +307,13 @@ export const Dashboard: React.FC = () => {
                                 ))}
                             </Pie>
                             <Tooltip 
-                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                                contentStyle={{ 
+                                    backgroundColor: tooltipBg, 
+                                    borderRadius: '8px', 
+                                    border: `1px solid ${tooltipBorder}`, 
+                                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
+                                }}
+                                itemStyle={{ color: isDarkMode ? '#FDFBF7' : '#1A1612' }}
                             />
                             <Legend 
                                 layout="horizontal" 
