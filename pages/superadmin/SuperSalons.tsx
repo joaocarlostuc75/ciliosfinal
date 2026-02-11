@@ -1,9 +1,113 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../services/mockDb';
 import { Salon, SubscriptionStatus } from '../../types';
 import { format, differenceInDays } from 'date-fns';
+
+// Constants for filter options
+const STATUS_OPTIONS = [
+    { value: 'ACTIVE', label: 'Ativo' },
+    { value: 'TRIAL', label: 'Em Teste (Trial)' },
+    { value: 'EXPIRED', label: 'Expirado' },
+    { value: 'BLOCKED', label: 'Bloqueado' },
+    { value: 'CANCELLED', label: 'Cancelado' },
+];
+
+const EXPIRATION_OPTIONS = [
+    { value: 'UPCOMING_7', label: 'Vence em 7 dias' },
+    { value: 'UPCOMING_30', label: 'Vence em 30 dias' },
+    { value: 'EXPIRED_REAL', label: 'Já Vencidos' },
+];
+
+// Internal MultiSelect Component
+const MultiSelectFilter: React.FC<{
+    label: string;
+    options: { value: string; label: string }[];
+    selected: string[];
+    onChange: (values: string[]) => void;
+    icon: string;
+}> = ({ label, options, selected, onChange, icon }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Close on click outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggleOption = (value: string) => {
+        if (selected.includes(value)) {
+            onChange(selected.filter(v => v !== value));
+        } else {
+            onChange([...selected, value]);
+        }
+    };
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                    selected.length > 0 
+                    ? 'bg-gold-50 border-gold-200 text-gold-900' 
+                    : 'bg-white border-gray-200 text-gray-600 hover:border-gold-300'
+                }`}
+            >
+                <span className="material-symbols-outlined text-lg">{icon}</span>
+                {label}
+                {selected.length > 0 && (
+                    <span className="ml-1 bg-gold-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.2rem] text-center">
+                        {selected.length}
+                    </span>
+                )}
+                <span className="material-symbols-outlined text-sm ml-1 opacity-50">expand_more</span>
+            </button>
+
+            {isOpen && (
+                <div className="absolute top-full mt-2 left-0 w-60 bg-white rounded-xl shadow-xl border border-gold-100 z-50 overflow-hidden animate-fade-in">
+                    <div className="p-2 space-y-1 max-h-60 overflow-y-auto">
+                        {options.map((opt) => {
+                            const isSelected = selected.includes(opt.value);
+                            return (
+                                <div 
+                                    key={opt.value} 
+                                    onClick={() => toggleOption(opt.value)}
+                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                                        isSelected ? 'bg-gold-50 text-gold-900 font-bold' : 'text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                                        isSelected ? 'bg-gold-500 border-gold-500' : 'border-gray-300'
+                                    }`}>
+                                        {isSelected && <span className="material-symbols-outlined text-white text-[10px] font-bold">check</span>}
+                                    </div>
+                                    {opt.label}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {selected.length > 0 && (
+                        <div className="bg-gray-50 border-t border-gray-100 p-2">
+                            <button 
+                                onClick={() => { onChange([]); setIsOpen(false); }}
+                                className="w-full text-center text-xs text-red-500 font-bold hover:underline"
+                            >
+                                Limpar Seleção
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 export const SuperSalons: React.FC = () => {
     const navigate = useNavigate();
@@ -15,8 +119,10 @@ export const SuperSalons: React.FC = () => {
 
     // Filter State
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'TRIAL' | 'EXPIRED' | 'BLOCKED' | 'CANCELLED'>('ALL');
-    const [expirationFilter, setExpirationFilter] = useState<'ALL' | 'EXPIRED_REAL' | 'UPCOMING_7' | 'UPCOMING_30'>('ALL');
+    
+    // New Multi-Select State
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+    const [selectedExpirations, setSelectedExpirations] = useState<string[]>([]);
 
     useEffect(() => {
         loadData();
@@ -25,7 +131,7 @@ export const SuperSalons: React.FC = () => {
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, expirationFilter]);
+    }, [searchTerm, selectedStatuses, selectedExpirations]);
 
     const loadData = async () => {
         setSalons(await db.getAllSalons());
@@ -67,23 +173,24 @@ export const SuperSalons: React.FC = () => {
         const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                               s.owner_email?.toLowerCase().includes(searchTerm.toLowerCase());
         
-        // 2. Status Filter
-        const matchesStatus = statusFilter === 'ALL' || s.subscription_status === statusFilter;
+        // 2. Status Filter (Multi-select OR logic)
+        // If nothing selected, match all. If selected, status must be in list.
+        const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(s.subscription_status);
 
-        // 3. Expiration Filter
-        let matchesExpiration = true;
-        if (expirationFilter !== 'ALL') {
-            if (s.is_lifetime_free || !s.subscription_end_date) {
-                matchesExpiration = false; // Cannot filter by expiration if lifetime or undefined
-            } else {
+        // 3. Expiration Filter (Multi-select OR logic)
+        let matchesExpiration = selectedExpirations.length === 0; // If nothing selected, match all
+        
+        if (selectedExpirations.length > 0) {
+            // Lifetime accounts don't match expiration filters usually
+            if (!s.is_lifetime_free && s.subscription_end_date) {
                 const days = differenceInDays(new Date(s.subscription_end_date), new Date());
                 
-                if (expirationFilter === 'EXPIRED_REAL') {
-                    matchesExpiration = days < 0;
-                } else if (expirationFilter === 'UPCOMING_7') {
-                    matchesExpiration = days >= 0 && days <= 7;
-                } else if (expirationFilter === 'UPCOMING_30') {
-                    matchesExpiration = days >= 0 && days <= 30;
+                const matchesExpired = selectedExpirations.includes('EXPIRED_REAL') && days < 0;
+                const matchesUp7 = selectedExpirations.includes('UPCOMING_7') && days >= 0 && days <= 7;
+                const matchesUp30 = selectedExpirations.includes('UPCOMING_30') && days >= 0 && days <= 30;
+
+                if (matchesExpired || matchesUp7 || matchesUp30) {
+                    matchesExpiration = true;
                 }
             }
         }
@@ -129,9 +236,11 @@ export const SuperSalons: React.FC = () => {
 
     const clearFilters = () => {
         setSearchTerm('');
-        setStatusFilter('ALL');
-        setExpirationFilter('ALL');
+        setSelectedStatuses([]);
+        setSelectedExpirations([]);
     };
+
+    const hasActiveFilters = selectedStatuses.length > 0 || selectedExpirations.length > 0 || searchTerm !== '';
 
     return (
         <div>
@@ -143,7 +252,7 @@ export const SuperSalons: React.FC = () => {
             </div>
 
             {/* Advanced Filters Toolbar */}
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gold-100 mb-6 flex flex-col lg:flex-row gap-4 items-center">
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gold-100 mb-6 flex flex-col lg:flex-row gap-4 items-center z-20 relative">
                 
                 {/* Search */}
                 <div className="relative flex-1 w-full">
@@ -158,38 +267,34 @@ export const SuperSalons: React.FC = () => {
                 </div>
 
                 {/* Filters Group */}
-                <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
-                    <select 
-                        value={statusFilter}
-                        onChange={e => setStatusFilter(e.target.value as any)}
-                        className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 bg-white outline-none focus:border-gold-500 min-w-[140px]"
-                    >
-                        <option value="ALL">Todos os Status</option>
-                        <option value="ACTIVE">Ativo</option>
-                        <option value="TRIAL">Em Teste (Trial)</option>
-                        <option value="EXPIRED">Expirado</option>
-                        <option value="BLOCKED">Bloqueado</option>
-                        <option value="CANCELLED">Cancelado</option>
-                    </select>
+                <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+                    
+                    <MultiSelectFilter 
+                        label="Status" 
+                        icon="verified"
+                        options={STATUS_OPTIONS}
+                        selected={selectedStatuses}
+                        onChange={setSelectedStatuses}
+                    />
 
-                    <select 
-                        value={expirationFilter}
-                        onChange={e => setExpirationFilter(e.target.value as any)}
-                        className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 bg-white outline-none focus:border-gold-500 min-w-[160px]"
-                    >
-                        <option value="ALL">Todo Vencimento</option>
-                        <option value="UPCOMING_7">Vence em 7 dias</option>
-                        <option value="UPCOMING_30">Vence em 30 dias</option>
-                        <option value="EXPIRED_REAL">Já Vencidos</option>
-                    </select>
+                    <MultiSelectFilter 
+                        label="Vencimento" 
+                        icon="event_busy"
+                        options={EXPIRATION_OPTIONS}
+                        selected={selectedExpirations}
+                        onChange={setSelectedExpirations}
+                    />
 
-                    <button 
-                        onClick={clearFilters}
-                        className="px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        title="Limpar Filtros"
-                    >
-                        <span className="material-symbols-outlined text-lg">filter_alt_off</span>
-                    </button>
+                    {hasActiveFilters && (
+                        <button 
+                            onClick={clearFilters}
+                            className="px-3 py-2.5 rounded-xl border border-red-100 text-red-500 hover:bg-red-50 transition-colors flex items-center gap-1 font-bold text-xs uppercase tracking-wide"
+                            title="Limpar Filtros"
+                        >
+                            <span className="material-symbols-outlined text-lg">filter_alt_off</span>
+                            Limpar
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -222,7 +327,7 @@ export const SuperSalons: React.FC = () => {
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gold-100">
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gold-100 z-10 relative">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left whitespace-nowrap">
                         <thead className="bg-gold-50 border-b border-gold-200">
