@@ -436,14 +436,14 @@ export const Schedule: React.FC = () => {
   return (
     <div className="h-full flex flex-col xl:flex-row gap-6">
        
-       <div className="xl:w-80 flex flex-col gap-6 shrink-0">
+       <div className="w-full xl:w-80 flex flex-col gap-6 shrink-0">
           
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gold-100">
              <div className="flex items-center justify-between mb-4">
                 <button onClick={() => handleMonthChange('prev')} className="p-1 hover:bg-gray-100 rounded-full text-gold-700">
                     <span className="material-symbols-outlined">chevron_left</span>
                 </button>
-                <h2 className="font-serif font-bold text-gold-900 capitalize">
+                <h2 className="font-serif font-bold text-gold-900 capitalize text-sm sm:text-base">
                     {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
                 </h2>
                 <button 
@@ -471,7 +471,7 @@ export const Schedule: React.FC = () => {
                             key={idx}
                             onClick={() => { setSelectedDate(day); setCurrentMonth(day); }}
                             className={`
-                                h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative
+                                h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium transition-all relative mx-auto
                                 ${!isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
                                 ${isSelected ? 'bg-gold-500 text-white shadow-md' : 'hover:bg-gold-50'}
                             `}
@@ -504,35 +504,35 @@ export const Schedule: React.FC = () => {
           </div>
        </div>
 
-       <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-lg border border-gold-100 overflow-hidden h-[600px] xl:h-auto">
+       <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-lg border border-gold-100 overflow-hidden min-h-[500px]">
             <div className="p-4 border-b border-gold-100 bg-gold-50/30 flex flex-col sm:flex-row justify-between items-center sticky top-0 z-10 backdrop-blur gap-3">
-                <div className="flex items-center gap-2 bg-white rounded-lg p-1 shadow-sm border border-gold-100">
+                <div className="flex items-center gap-2 bg-white rounded-lg p-1 shadow-sm border border-gold-100 w-full sm:w-auto overflow-x-auto">
                     <button 
                         onClick={() => setViewMode('day')}
-                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'day' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
+                        className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'day' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
                     >
                         Dia
                     </button>
                     <button 
                         onClick={() => setViewMode('week')}
-                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'week' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
+                        className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'week' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
                     >
                         Semana
                     </button>
                     <button 
                         onClick={() => setViewMode('month')}
-                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'month' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
+                        className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'month' ? 'bg-gold-500 text-white shadow' : 'text-gray-500 hover:bg-gold-50'}`}
                     >
                         Mês
                     </button>
                 </div>
 
                 <div className="flex gap-2 w-full sm:w-auto md:hidden">
-                    <button onClick={openApptModal} className="flex-1 text-white bg-gold-500 rounded-lg shadow-sm border border-gold-600 flex justify-center items-center gap-2 font-bold text-xs p-2">
+                    <button onClick={openApptModal} className="flex-1 text-white bg-gold-500 rounded-lg shadow-sm border border-gold-600 flex justify-center items-center gap-2 font-bold text-xs p-3">
                         <span className="material-symbols-outlined text-sm">add</span>
                         Novo
                     </button>
-                    <button onClick={openBlockModal} className="flex-1 text-gray-700 bg-white rounded-lg shadow-sm border border-gray-200 flex justify-center items-center gap-2 font-bold text-xs p-2">
+                    <button onClick={openBlockModal} className="flex-1 text-gray-700 bg-white rounded-lg shadow-sm border border-gray-200 flex justify-center items-center gap-2 font-bold text-xs p-3">
                         <span className="material-symbols-outlined text-sm">block</span>
                         Bloquear
                     </button>
@@ -663,7 +663,7 @@ export const Schedule: React.FC = () => {
        {/* Create Appointment Modal */}
        {isApptModalOpen && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
+              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
                   <h3 className="font-serif text-xl font-bold mb-4 text-gold-900">Novo Agendamento</h3>
                   <form onSubmit={handleSaveNewAppointment} className="space-y-4">
                       
@@ -740,7 +740,7 @@ export const Schedule: React.FC = () => {
 
        {isRescheduleModalOpen && editingAppointment && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
+              <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
                   <h3 className="font-serif text-xl font-bold mb-4">Remarcar</h3>
                   <form onSubmit={handleSaveReschedule} className="space-y-4">
                       <div>

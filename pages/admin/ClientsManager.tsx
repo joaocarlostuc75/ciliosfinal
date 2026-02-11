@@ -163,10 +163,43 @@ export const ClientsManager: React.FC = () => {
         </button>
       </div>
 
-      {/* Responsive Layout: Cards on Mobile, Table on Desktop */}
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gold-100">
         
-        {/* Desktop Table */}
+        {/* Mobile Cards (< md) */}
+        <div className="md:hidden divide-y divide-gray-100">
+            {filteredClients.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">Nenhum cliente encontrado.</div>
+            ) : (
+                filteredClients.map(client => (
+                    <div key={client.id} className="p-4 flex flex-col gap-3">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h3 className="font-bold text-gray-800 text-base">{client.name}</h3>
+                                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[10px]">calendar_month</span>
+                                    Desde {format(new Date(client.created_at), 'dd/MM/yy')}
+                                </p>
+                            </div>
+                            <div className="flex gap-1">
+                                <button onClick={() => handleViewHistory(client)} className="p-2 bg-gold-50 text-gold-700 rounded-lg"><span className="material-symbols-outlined text-lg">history</span></button>
+                                <button onClick={() => handleOpenForm(client)} className="p-2 bg-blue-50 text-blue-600 rounded-lg"><span className="material-symbols-outlined text-lg">edit</span></button>
+                                <button onClick={() => handleDeleteClient(client.id)} className="p-2 bg-red-50 text-red-500 rounded-lg"><span className="material-symbols-outlined text-lg">delete</span></button>
+                            </div>
+                        </div>
+                        
+                        <button 
+                             onClick={() => handleWhatsApp(client)}
+                             className="flex items-center justify-center gap-2 bg-green-50 text-green-700 p-2.5 rounded-xl font-bold text-sm hover:bg-green-100 transition-colors border border-green-100 mt-1"
+                        >
+                             <span className="material-symbols-outlined text-lg">chat</span>
+                             WhatsApp: {client.whatsapp}
+                        </button>
+                    </div>
+                ))
+            )}
+        </div>
+
+        {/* Desktop Table (>= md) */}
         <div className="hidden md:block">
           <table className="w-full text-left">
             <thead className="bg-gold-50 border-b border-gold-200">
@@ -197,13 +230,13 @@ export const ClientsManager: React.FC = () => {
                       {format(new Date(client.created_at), 'dd/MM/yyyy')}
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
-                      <button onClick={() => handleViewHistory(client)} title="Histórico" className="text-gold-600 hover:text-gold-800">
+                      <button onClick={() => handleViewHistory(client)} title="Histórico" className="text-gold-600 hover:text-gold-800 p-2 hover:bg-gold-50 rounded-full transition-colors">
                         <span className="material-symbols-outlined">history</span>
                       </button>
-                      <button onClick={() => handleOpenForm(client)} title="Editar" className="text-blue-500 hover:text-blue-700">
+                      <button onClick={() => handleOpenForm(client)} title="Editar" className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors">
                         <span className="material-symbols-outlined">edit</span>
                       </button>
-                      <button onClick={() => handleDeleteClient(client.id)} title="Excluir" className="text-red-400 hover:text-red-600">
+                      <button onClick={() => handleDeleteClient(client.id)} title="Excluir" className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-full transition-colors">
                         <span className="material-symbols-outlined">delete</span>
                       </button>
                     </td>
@@ -213,43 +246,12 @@ export const ClientsManager: React.FC = () => {
             </tbody>
           </table>
         </div>
-
-        {/* Mobile Cards */}
-        <div className="md:hidden divide-y divide-gray-100">
-            {filteredClients.length === 0 ? (
-                <div className="p-8 text-center text-gray-400">Nenhum cliente encontrado.</div>
-            ) : (
-                filteredClients.map(client => (
-                    <div key={client.id} className="p-4 flex flex-col gap-3">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h3 className="font-bold text-gray-800">{client.name}</h3>
-                                <p className="text-xs text-gray-500">Desde: {format(new Date(client.created_at), 'dd/MM/yy')}</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={() => handleViewHistory(client)} className="p-2 bg-gold-50 text-gold-700 rounded-full"><span className="material-symbols-outlined text-lg">history</span></button>
-                                <button onClick={() => handleOpenForm(client)} className="p-2 bg-blue-50 text-blue-600 rounded-full"><span className="material-symbols-outlined text-lg">edit</span></button>
-                                <button onClick={() => handleDeleteClient(client.id)} className="p-2 bg-red-50 text-red-500 rounded-full"><span className="material-symbols-outlined text-lg">delete</span></button>
-                            </div>
-                        </div>
-                        
-                        <button 
-                             onClick={() => handleWhatsApp(client)}
-                             className="flex items-center justify-center gap-2 bg-green-50 text-green-700 p-2 rounded-xl font-bold text-sm hover:bg-green-100 transition-colors border border-green-100"
-                        >
-                             <span className="material-symbols-outlined text-lg">chat</span>
-                             Enviar Mensagem
-                        </button>
-                    </div>
-                ))
-            )}
-        </div>
       </div>
 
       {/* Create/Edit Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-md animate-fade-in">
+          <div className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-md animate-fade-in max-h-[90vh] overflow-y-auto">
             <h3 className="font-serif text-2xl font-bold mb-6 text-gold-900">{editingClient ? 'Editar' : 'Novo'} Cliente</h3>
             <form onSubmit={handleSaveClient} className="space-y-4">
               <div className="space-y-2">
@@ -291,7 +293,7 @@ export const ClientsManager: React.FC = () => {
             </div>
             
             {/* Total Spent Badge */}
-            <div className="p-4 bg-gold-100/30 flex justify-between items-center border-b border-gold-100">
+            <div className="p-4 bg-gold-100/30 flex justify-between items-center border-b border-gold-100 shrink-0">
                 <span className="font-bold text-gold-800 text-sm uppercase">Total Investido</span>
                 <span className="font-serif text-xl font-bold text-gold-900">R$ {viewingHistory.totalSpent.toFixed(2)}</span>
             </div>
